@@ -1,16 +1,17 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, HelpCircle, PawPrint, Wheat } from "lucide-react";
+import { HelpCircle, PawPrint, Sprout, Wheat } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
-import { ProfileLink } from "@/components/ProfileLink";
-import { PostDeleteControl } from "../communities/[id]/PostDeleteControl";
-import { PostLikeControl } from "../communities/[id]/PostLikeControl";
-import { PostCommentComposer } from "../communities/[id]/PostCommentComposer";
-import { PostCommentItem } from "../communities/[id]/PostCommentItem";
-import { PostCommentReactions } from "../communities/[id]/PostCommentReactions";
-import { PostMedia } from "../communities/[id]/PostMedia";
 import { fetchPostMediaByPostId } from "@/lib/postMedia";
+import { FeedComposerLauncher } from "./FeedComposerLauncher";
+import { ReelFeed } from "./ReelFeed";
+import type { Reel, ReelComment } from "./types";
+
+export const metadata: Metadata = {
+  title: "Farming Reels · Shamba Circle",
+};
 
 // Bounded page size for the feed's own keyset pagination — deliberately
 // smaller than a single community's 50-post cap, since this aggregates
@@ -30,15 +31,6 @@ const GROUP_ICON: Record<string, typeof Wheat> = {
   "Crop Farmers": Wheat,
   "Animal Farmers": PawPrint,
   Other: HelpCircle,
-};
-
-type FeedPostRow = {
-  id: string;
-  community_id: string;
-  profile_id: string;
-  author_display_name: string;
-  body: string;
-  created_at: string;
 };
 
 type PostCommentRow = {
@@ -94,10 +86,21 @@ export default async function Feed({
     .filter((c) => !joinedCommunityIdSet.has(c.id))
     .slice(0, SUGGESTED_COMMUNITY_COUNT);
 
+  // Feed-level posts (community_id IS NULL) are visible to every
+  // authenticated farmer regardless of community membership -- they
+  // aren't scoped to any community at all. Community posts still only
+  // show up here if the caller has joined that specific community.
+  // PostgREST's .in() alone never matches NULL rows (standard SQL
+  // semantics), so the NULL case is added explicitly via .or().
+  const communityFilter =
+    joinedCommunityIds.length > 0
+      ? `community_id.is.null,community_id.in.(${joinedCommunityIds.join(",")})`
+      : "community_id.is.null";
+
   let postsQuery = supabase
     .from("posts")
     .select("id, community_id, profile_id, author_display_name, body, created_at")
-    .in("community_id", joinedCommunityIds)
+    .or(communityFilter)
     .order("created_at", { ascending: false })
     .limit(PAGE_SIZE + 1);
 
@@ -105,38 +108,42 @@ export default async function Feed({
     postsQuery = postsQuery.lt("created_at", before);
   }
 
-  const { data: postsRaw, error: postsError } =
-    joinedCommunityIds.length > 0
-      ? await postsQuery
-      : { data: [] as FeedPostRow[], error: null };
+  const { data: postsRaw, error: postsError } = await postsQuery;
 
   const hasMore = (postsRaw?.length ?? 0) > PAGE_SIZE;
   const posts = (postsRaw ?? []).slice(0, PAGE_SIZE);
   const nextCursor = hasMore ? posts[posts.length - 1]?.created_at : null;
 
   const postIds = posts.map((post) => post.id);
+  const authorIds = Array.from(new Set(posts.map((post) => post.profile_id)));
 
   const postMediaByPostId = await fetchPostMediaByPostId(supabase, postIds);
 
-  const [{ data: myLikes }, likeCountResults, { data: comments, error: commentsError }] =
-    await Promise.all([
-      supabase.from("post_likes").select("post_id"),
-      Promise.all(
-        postIds.map((postId) => supabase.rpc("post_like_count", { p_post_id: postId })),
-      ),
-      postIds.length > 0
-        ? supabase
-            .from("post_comments")
-            .select("id, post_id, profile_id, author_display_name, body, created_at")
-            .in("post_id", postIds)
-            .order("created_at", { ascending: true })
-        : Promise.resolve({ data: [] as PostCommentRow[], error: null }),
-    ]);
+  const [
+    { data: myLikes },
+    likeCountResults,
+    { data: comments, error: commentsError },
+    { data: myFollowRows },
+  ] = await Promise.all([
+    supabase.from("post_likes").select("post_id"),
+    Promise.all(postIds.map((postId) => supabase.rpc("post_like_count", { p_post_id: postId }))),
+    postIds.length > 0
+      ? supabase
+          .from("post_comments")
+          .select("id, post_id, profile_id, author_display_name, body, created_at")
+          .in("post_id", postIds)
+          .order("created_at", { ascending: true })
+      : Promise.resolve({ data: [] as PostCommentRow[], error: null }),
+    authorIds.length > 0
+      ? supabase.from("follows").select("followed_profile_id").in("followed_profile_id", authorIds)
+      : Promise.resolve({ data: [] as { followed_profile_id: string }[] }),
+  ]);
 
   const likedPostIds = new Set((myLikes ?? []).map((like) => like.post_id));
   const likeCountByPostId = new Map(
     postIds.map((postId, index) => [postId, Number(likeCountResults[index]?.data ?? 0)]),
   );
+  const followingProfileIds = new Set((myFollowRows ?? []).map((row) => row.followed_profile_id));
 
   const commentsByPostId = new Map<string, PostCommentRow[]>();
   for (const comment of comments ?? []) {
@@ -178,37 +185,77 @@ export default async function Feed({
     ]),
   );
 
+  // A comments-fetch failure degrades to an in-sheet error message per
+  // Reel (see Reel.commentsFailed / ReelCommentsSheet) rather than
+  // failing the whole page -- same resilience the old card feed had,
+  // where a comments error only affected the per-post comment section,
+  // never the posts/media/likes above it.
   const hasError = Boolean(membershipsError || postsError);
-  const isMember = true; // every post in this feed is, by construction, from a joined community
+  const commentsFailed = Boolean(commentsError);
+
+  const reels: Reel[] = posts.map((post) => {
+    const reelComments: ReelComment[] = (commentsByPostId.get(post.id) ?? []).map((comment) => ({
+      id: comment.id,
+      postId: comment.post_id,
+      profileId: comment.profile_id,
+      authorDisplayName: comment.author_display_name,
+      body: comment.body,
+      isAuthor: comment.profile_id === user.id,
+      myReactionTypes: myReactionTypesByCommentId.get(comment.id) ?? [],
+      reactionCounts: reactionCountsByCommentId.get(comment.id) ?? [],
+    }));
+
+    return {
+      id: post.id,
+      communityId: post.community_id,
+      communityName: post.community_id
+        ? communityNameById.get(post.community_id) ?? post.community_id
+        : null,
+      profileId: post.profile_id,
+      authorDisplayName: post.author_display_name,
+      body: post.body,
+      createdAt: post.created_at,
+      media: postMediaByPostId.get(post.id) ?? [],
+      isAuthor: post.profile_id === user.id,
+      liked: likedPostIds.has(post.id),
+      likeCount: likeCountByPostId.get(post.id) ?? 0,
+      comments: reelComments,
+      commentsFailed,
+      showFollow: post.profile_id !== user.id,
+      isFollowing: followingProfileIds.has(post.profile_id),
+    };
+  });
 
   return (
-    <div className="flex flex-1 flex-col bg-shamba-bg">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-shamba-bg">
       <AppHeader />
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
-        <div className="w-full max-w-sm">
-          <h1 className="font-display text-3xl font-bold leading-tight tracking-tight text-shamba-ink">
-            Your feed
-          </h1>
-          <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
-            Recent posts from the communities you belong to.
-          </p>
-        </div>
-
-        {hasError && (
-          <p
-            role="alert"
-            className="mt-6 w-full max-w-sm text-sm font-semibold text-shamba-rust"
-          >
+      {hasError && (
+        <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center overflow-y-auto px-6 pb-20 pt-8 sm:px-10">
+          <p role="alert" className="mt-6 w-full max-w-sm text-sm font-semibold text-shamba-rust">
             We couldn&apos;t load your feed right now. Please try again later.
           </p>
-        )}
+        </main>
+      )}
 
-        {!hasError && joinedCommunityIds.length === 0 && (
+      {!hasError && posts.length === 0 && (
+        <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center overflow-y-auto px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
+          <div className="w-full max-w-sm">
+            <div className="flex items-center gap-2">
+              <Sprout className="size-6 text-shamba-green" aria-hidden="true" />
+              <h1 className="font-display text-3xl font-bold leading-tight tracking-tight text-shamba-ink">
+                Farming Reels
+              </h1>
+            </div>
+            <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
+              Short videos and photos from farmers across Shamba Circle.
+            </p>
+          </div>
+
           <div className="mt-6 w-full max-w-sm rounded-shamba border border-shamba-line bg-shamba-card p-6">
             <p className="text-base leading-6 text-shamba-ink-soft">
-              You haven&apos;t joined any communities yet. Join one to start seeing
-              posts here.
+              No Reels yet. Share something, or join a community to see posts
+              from other farmers here.
             </p>
 
             {suggestedCommunities.length > 0 && (
@@ -238,136 +285,16 @@ export default async function Feed({
               Browse all Communities
             </Link>
           </div>
-        )}
+        </main>
+      )}
 
-        {!hasError && joinedCommunityIds.length > 0 && posts.length === 0 && (
-          <p className="mt-6 w-full max-w-sm text-sm text-shamba-ink-soft">
-            No posts yet from your communities. Check back soon.
-          </p>
-        )}
+      {!hasError && posts.length > 0 && (
+        <main className="relative flex-1 overflow-hidden">
+          <ReelFeed reels={reels} nextCursor={nextCursor} />
+        </main>
+      )}
 
-        {!hasError && posts.length > 0 && (
-          <div className="mt-6 flex w-full max-w-sm flex-col gap-3">
-            {posts.map((post) => (
-              <article
-                key={post.id}
-                className="rounded-shamba border border-shamba-line bg-shamba-card p-4"
-              >
-                <Link
-                  href={`/communities/${post.community_id}`}
-                  className="inline-flex font-mono text-xs font-semibold text-shamba-green transition-colors hover:text-shamba-green-deep"
-                >
-                  {communityNameById.get(post.community_id) ?? post.community_id}
-                </Link>
-
-                <div className="mt-1 flex items-baseline justify-between gap-2">
-                  <ProfileLink
-                    profileId={post.profile_id}
-                    displayName={post.author_display_name}
-                    className="font-sans text-sm font-semibold text-shamba-ink"
-                  />
-                  <p className="shrink-0 font-mono text-xs text-shamba-ink-soft">
-                    {new Date(post.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <p className="mt-1 whitespace-pre-wrap text-base leading-6 text-shamba-ink-soft">
-                  {post.body}
-                </p>
-                <PostMedia items={postMediaByPostId.get(post.id) ?? []} />
-
-                <PostDeleteControl postId={post.id} isAuthor={post.profile_id === user.id} />
-                <PostLikeControl
-                  postId={post.id}
-                  isMember={isMember}
-                  initialLiked={likedPostIds.has(post.id)}
-                  initialLikeCount={likeCountByPostId.get(post.id) ?? 0}
-                />
-
-                <div className="mt-3 flex flex-col gap-2 border-t border-shamba-line pt-3">
-                  {commentsError && (
-                    <p role="alert" className="text-xs font-semibold text-shamba-rust">
-                      We couldn&apos;t load comments right now.
-                    </p>
-                  )}
-
-                  {!commentsError && (commentsByPostId.get(post.id)?.length ?? 0) === 0 && (
-                    <p className="text-xs text-shamba-ink-soft">No comments yet.</p>
-                  )}
-
-                  {!commentsError &&
-                    commentsByPostId.get(post.id)?.map((comment) => (
-                      <div key={comment.id} className="flex flex-col gap-1.5">
-                        <PostCommentItem
-                          commentId={comment.id}
-                          authorProfileId={comment.profile_id}
-                          authorDisplayName={comment.author_display_name}
-                          body={comment.body}
-                          isAuthor={comment.profile_id === user.id}
-                        />
-                        <PostCommentReactions
-                          commentId={comment.id}
-                          isMember={isMember}
-                          initialMyReactionTypes={
-                            myReactionTypesByCommentId.get(comment.id) ?? []
-                          }
-                          initialCounts={reactionCountsByCommentId.get(comment.id) ?? []}
-                        />
-                      </div>
-                    ))}
-
-                  <PostCommentComposer postId={post.id} isMember={isMember} />
-                </div>
-              </article>
-            ))}
-
-            {nextCursor && (
-              <Link
-                href={`/feed?before=${encodeURIComponent(nextCursor)}`}
-                className="inline-flex items-center justify-center rounded-shamba border border-shamba-line px-6 py-3 font-sans text-base font-semibold text-shamba-ink transition-colors hover:bg-shamba-card"
-              >
-                Load more
-              </Link>
-            )}
-          </div>
-        )}
-
-        {!hasError && joinedCommunityIds.length > 0 && suggestedCommunities.length > 0 && (
-          <section className="mt-10 w-full max-w-sm">
-            <h2 className="font-display text-lg font-semibold text-shamba-ink">
-              Discover more communities
-            </h2>
-            <p className="mt-1 text-sm text-shamba-ink-soft">
-              Communities you haven&apos;t joined yet.
-            </p>
-
-            <div className="mt-3 flex flex-col gap-2">
-              {suggestedCommunities.map((community) => {
-                const Icon = GROUP_ICON[community.group_name] ?? HelpCircle;
-                return (
-                  <Link
-                    key={community.id}
-                    href={`/communities/${community.id}`}
-                    className="flex items-center gap-3 rounded-shamba border border-shamba-line bg-shamba-card p-3 transition-colors hover:border-shamba-green"
-                  >
-                    <Icon className="size-5 shrink-0 text-shamba-green" aria-hidden="true" />
-                    <span className="font-sans text-sm font-medium text-shamba-ink">
-                      {community.name}
-                    </span>
-                  </Link>
-                );
-              })}
-            </div>
-
-            <Link
-              href="/communities"
-              className="mt-3 inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
-            >
-              See all communities
-              <ArrowRight className="size-4" aria-hidden="true" />
-            </Link>
-          </section>
-        )}
-      </main>
+      <FeedComposerLauncher />
     </div>
   );
 }
