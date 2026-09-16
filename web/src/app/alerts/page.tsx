@@ -24,6 +24,13 @@ export default async function Alerts() {
   const { data, error } = await supabase.rpc("get_my_alerts");
   const alerts = data as Alert[] | null;
 
+  // Computed once from this same fetch, not a live cross-component
+  // count -- consistent with how the rest of this app already works
+  // (e.g. like/comment counts are per-card, not page-level aggregates).
+  // It reflects state as of this page load; a farmer sees it update on
+  // their next visit/refresh, same as everything else here.
+  const unreadCount = (alerts ?? []).filter((alert) => !alert.is_read).length;
+
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
       <AppHeader />
@@ -38,6 +45,14 @@ export default async function Alerts() {
             your farmer preferences. This is a preview of Shamba Circle&apos;s
             alert system, not a live, real-time feed yet.
           </p>
+
+          {!error && (alerts?.length ?? 0) > 0 && (
+            <p className="mt-2 font-mono text-sm font-semibold text-shamba-green">
+              {unreadCount > 0
+                ? `${unreadCount} unread`
+                : "All caught up — no unread alerts"}
+            </p>
+          )}
         </div>
 
         {error && (
