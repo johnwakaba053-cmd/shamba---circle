@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BookOpen, Rss, Sprout, Store, UserRound, Users } from "lucide-react";
+import { Bell, BookOpen, Rss, Sprout, Store, UserRound, Users } from "lucide-react";
 import { SignOutButton } from "./SignOutButton";
 
 // Shared across every authenticated page. Communities' original inline
@@ -48,6 +48,14 @@ export function AppHeader() {
         >
           <BookOpen className="size-4" aria-hidden="true" />
           Education
+        </Link>
+
+        <Link
+          href="/alerts"
+          className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+        >
+          <Bell className="size-4" aria-hidden="true" />
+          Alerts
         </Link>
 
         <Link
