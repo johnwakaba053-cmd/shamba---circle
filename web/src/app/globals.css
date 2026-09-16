@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+/*
+ * Shamba Circle design tokens, ported 1:1 from the prototype's
+ * src/style.css `:root` block. Values are unchanged; only the names
+ * are prefixed with `shamba-` to namespace them from Tailwind's own
+ * default palette and avoid collisions (e.g. Tailwind already has a
+ * "green" color scale).
+ *
+ * NOT ported: a type scale and a spacing scale. Neither exists as a
+ * defined token in the prototype — font sizes and paddings/margins
+ * are hardcoded per component there, not exposed as reusable
+ * variables, so there is nothing genuine to port. Tailwind's default
+ * scales are used as-is until real values are needed component by
+ * component.
+ *
+ * --shamba-radius is ported as declared (14px) even though the
+ * prototype itself only applies it in one place (.sc-channel) and
+ * uses a hardcoded 10px for every other card in the file. That
+ * inconsistency exists in the source; it is not resolved here.
+ */
+:root {
+  --shamba-bg: #f3eedc;
+  --shamba-card: #fffcf3;
+  --shamba-ink: #26311f;
+  --shamba-ink-soft: #5c6650;
+  --shamba-green: #3f6b3b;
+  --shamba-green-deep: #2a4a28;
+  --shamba-ochre: #c17f3e;
+  --shamba-rust: #b5502f;
+  --shamba-blue: #4a7a8c;
+  --shamba-line: #dcd3b8;
+  --shamba-radius: 14px;
+}
+
+@theme inline {
+  --color-shamba-bg: var(--shamba-bg);
+  --color-shamba-card: var(--shamba-card);
+  --color-shamba-ink: var(--shamba-ink);
+  --color-shamba-ink-soft: var(--shamba-ink-soft);
+  --color-shamba-green: var(--shamba-green);
+  --color-shamba-green-deep: var(--shamba-green-deep);
+  --color-shamba-ochre: var(--shamba-ochre);
+  --color-shamba-rust: var(--shamba-rust);
+  --color-shamba-blue: var(--shamba-blue);
+  --color-shamba-line: var(--shamba-line);
+
+  --radius-shamba: var(--shamba-radius);
+
+  /* Three-role type system ported from the prototype's Google Fonts
+     import (Space Grotesk / Source Sans 3 / IBM Plex Mono), loaded
+     via next/font/google in layout.tsx. Mapped onto Tailwind's
+     built-in font-sans / font-mono roles, plus a new font-display
+     role for headings (Tailwind has no built-in "display" role). */
+  --font-sans: var(--font-source-sans), sans-serif;
+  --font-mono: var(--font-ibm-plex-mono), monospace;
+  --font-display: var(--font-space-grotesk), sans-serif;
+}
+
+body {
+  background: var(--shamba-bg);
+  color: var(--shamba-ink);
+  font-family: var(--font-sans);
+}
