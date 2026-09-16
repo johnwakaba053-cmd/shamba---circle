@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowRight, HelpCircle, PawPrint, Wheat } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
+import { ProfileLink } from "@/components/ProfileLink";
 import { PostDeleteControl } from "../communities/[id]/PostDeleteControl";
 import { PostLikeControl } from "../communities/[id]/PostLikeControl";
 import { PostCommentComposer } from "../communities/[id]/PostCommentComposer";
@@ -260,9 +261,11 @@ export default async function Feed({
                 </Link>
 
                 <div className="mt-1 flex items-baseline justify-between gap-2">
-                  <p className="font-sans text-sm font-semibold text-shamba-ink">
-                    {post.author_display_name}
-                  </p>
+                  <ProfileLink
+                    profileId={post.profile_id}
+                    displayName={post.author_display_name}
+                    className="font-sans text-sm font-semibold text-shamba-ink"
+                  />
                   <p className="shrink-0 font-mono text-xs text-shamba-ink-soft">
                     {new Date(post.created_at).toLocaleDateString()}
                   </p>
@@ -296,6 +299,7 @@ export default async function Feed({
                       <div key={comment.id} className="flex flex-col gap-1.5">
                         <PostCommentItem
                           commentId={comment.id}
+                          authorProfileId={comment.profile_id}
                           authorDisplayName={comment.author_display_name}
                           body={comment.body}
                           isAuthor={comment.profile_id === user.id}

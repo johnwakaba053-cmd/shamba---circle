@@ -3,9 +3,11 @@ import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
+import { ProfileLink } from "@/components/ProfileLink";
 
 type Listing = {
   id: string;
+  profile_id: string;
   title: string;
   description: string;
   category: string;
@@ -30,7 +32,7 @@ export default async function Marketplace() {
   const { data: listings, error } = await supabase
     .from("listings")
     .select(
-      "id, title, description, category, listing_type, price, price_unit, location, seller_display_name, created_at",
+      "id, profile_id, title, description, category, listing_type, price, price_unit, location, seller_display_name, created_at",
     )
     .order("created_at", { ascending: false })
     .limit(50);
@@ -117,7 +119,12 @@ export default async function Marketplace() {
                 )}
 
                 <p className="mt-2 text-xs text-shamba-ink-soft">
-                  Listed by {listing.seller_display_name}
+                  Listed by{" "}
+                  <ProfileLink
+                    profileId={listing.profile_id}
+                    displayName={listing.seller_display_name}
+                    className="font-semibold text-shamba-ink-soft"
+                  />
                 </p>
               </article>
             ))}

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { ProfileLink } from "@/components/ProfileLink";
 
 const MAX_BODY_LENGTH = 2000;
 
@@ -17,11 +18,13 @@ type Status =
 
 export function PostCommentItem({
   commentId,
+  authorProfileId,
   authorDisplayName,
   body,
   isAuthor,
 }: {
   commentId: string;
+  authorProfileId: string;
   authorDisplayName: string;
   body: string;
   isAuthor: boolean;
@@ -141,9 +144,11 @@ export function PostCommentItem({
   if (mode === "editing") {
     return (
       <form onSubmit={handleSave} className="flex flex-col gap-2">
-        <span className="font-semibold text-shamba-ink text-sm">
-          {authorDisplayName}
-        </span>
+        <ProfileLink
+          profileId={authorProfileId}
+          displayName={authorDisplayName}
+          className="text-sm font-semibold text-shamba-ink"
+        />
         <textarea
           value={editBody}
           onChange={(event) => setEditBody(event.target.value.slice(0, MAX_BODY_LENGTH))}
@@ -197,7 +202,11 @@ export function PostCommentItem({
     <div className="flex flex-col gap-1 text-sm leading-5">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <span className="font-semibold text-shamba-ink">{authorDisplayName}</span>{" "}
+          <ProfileLink
+            profileId={authorProfileId}
+            displayName={authorDisplayName}
+            className="font-semibold text-shamba-ink"
+          />{" "}
           <span className="text-shamba-ink-soft">{body}</span>
         </div>
 

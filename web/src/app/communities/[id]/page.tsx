@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft, HelpCircle, PawPrint, Wheat } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
+import { ProfileLink } from "@/components/ProfileLink";
 import { MembershipControl } from "./MembershipControl";
 import { PostComposer } from "./PostComposer";
 import { PostLikeControl } from "./PostLikeControl";
@@ -185,9 +186,11 @@ export default async function CommunityDetail({
                   className="rounded-shamba border border-shamba-line bg-shamba-card p-4"
                 >
                   <div className="flex items-baseline justify-between gap-2">
-                    <p className="font-sans text-sm font-semibold text-shamba-ink">
-                      {post.author_display_name}
-                    </p>
+                    <ProfileLink
+                      profileId={post.profile_id}
+                      displayName={post.author_display_name}
+                      className="font-sans text-sm font-semibold text-shamba-ink"
+                    />
                     <p className="shrink-0 font-mono text-xs text-shamba-ink-soft">
                       {new Date(post.created_at).toLocaleDateString()}
                     </p>
@@ -220,6 +223,7 @@ export default async function CommunityDetail({
                         <div key={comment.id} className="flex flex-col gap-1.5">
                           <PostCommentItem
                             commentId={comment.id}
+                            authorProfileId={comment.profile_id}
                             authorDisplayName={comment.author_display_name}
                             body={comment.body}
                             isAuthor={comment.profile_id === user.id}
