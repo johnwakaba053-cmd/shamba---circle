@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowDown } from "lucide-react";
 import type { Reel } from "./types";
+import { useFeedHeaderVisibility } from "./FeedHeaderVisibility";
 import { ReelSlide } from "./ReelSlide";
 
 // The vertical, one-Reel-per-screen viewer. Native CSS scroll-snap
@@ -12,9 +13,19 @@ import { ReelSlide } from "./ReelSlide";
 // (?before=) navigation as the old card feed; it's simply presented as
 // one more full-height slide at the end instead of a "Load more" link
 // below a list.
+//
+// This div's own onScroll is also the single scroll-direction source
+// for the auto-hiding AppHeader (see FeedHeaderVisibility.tsx) --
+// deliberately reusing this existing container rather than adding a
+// second, page-level scroll listener.
 export function ReelFeed({ reels, nextCursor }: { reels: Reel[]; nextCursor: string | null }) {
+  const { reportScrollTop } = useFeedHeaderVisibility();
+
   return (
-    <div className="h-full snap-y snap-mandatory overflow-y-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:bg-shamba-bg">
+    <div
+      onScroll={(event) => reportScrollTop(event.currentTarget.scrollTop)}
+      className="h-full snap-y snap-mandatory overflow-y-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:bg-shamba-bg"
+    >
       {reels.map((reel) => (
         <ReelSlide key={reel.id} reel={reel} />
       ))}

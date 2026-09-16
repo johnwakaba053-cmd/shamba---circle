@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { fetchPostMediaByPostId } from "@/lib/postMedia";
 import { FeedComposerLauncher } from "./FeedComposerLauncher";
+import { FeedHeaderBar, FeedHeaderVisibilityProvider } from "./FeedHeaderVisibility";
 import { ReelFeed } from "./ReelFeed";
 import type { Reel, ReelComment } from "./types";
 
@@ -227,74 +228,78 @@ export default async function Feed({
   });
 
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-shamba-bg">
-      <AppHeader />
+    <FeedHeaderVisibilityProvider>
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-shamba-bg">
+        <FeedHeaderBar>
+          <AppHeader />
+        </FeedHeaderBar>
 
-      {hasError && (
-        <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center overflow-y-auto px-6 pb-20 pt-8 sm:px-10">
-          <p role="alert" className="mt-6 w-full max-w-sm text-sm font-semibold text-shamba-rust">
-            We couldn&apos;t load your feed right now. Please try again later.
-          </p>
-        </main>
-      )}
-
-      {!hasError && posts.length === 0 && (
-        <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center overflow-y-auto px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
-          <div className="w-full max-w-sm">
-            <div className="flex items-center gap-2">
-              <Sprout className="size-6 text-shamba-green" aria-hidden="true" />
-              <h1 className="font-display text-3xl font-bold leading-tight tracking-tight text-shamba-ink">
-                Farming Reels
-              </h1>
-            </div>
-            <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
-              Short videos and photos from farmers across Shamba Circle.
+        {hasError && (
+          <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center overflow-y-auto px-6 pb-20 pt-8 sm:px-10">
+            <p role="alert" className="mt-6 w-full max-w-sm text-sm font-semibold text-shamba-rust">
+              We couldn&apos;t load your feed right now. Please try again later.
             </p>
-          </div>
+          </main>
+        )}
 
-          <div className="mt-6 w-full max-w-sm rounded-shamba border border-shamba-line bg-shamba-card p-6">
-            <p className="text-base leading-6 text-shamba-ink-soft">
-              No Reels yet. Share something, or join a community to see posts
-              from other farmers here.
-            </p>
-
-            {suggestedCommunities.length > 0 && (
-              <div className="mt-4 flex flex-col gap-2">
-                {suggestedCommunities.map((community) => {
-                  const Icon = GROUP_ICON[community.group_name] ?? HelpCircle;
-                  return (
-                    <Link
-                      key={community.id}
-                      href={`/communities/${community.id}`}
-                      className="flex items-center gap-3 rounded-shamba border border-shamba-line bg-shamba-bg p-3 transition-colors hover:border-shamba-green"
-                    >
-                      <Icon className="size-5 shrink-0 text-shamba-green" aria-hidden="true" />
-                      <span className="font-sans text-sm font-medium text-shamba-ink">
-                        {community.name}
-                      </span>
-                    </Link>
-                  );
-                })}
+        {!hasError && posts.length === 0 && (
+          <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center overflow-y-auto px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
+            <div className="w-full max-w-sm">
+              <div className="flex items-center gap-2">
+                <Sprout className="size-6 text-shamba-green" aria-hidden="true" />
+                <h1 className="font-display text-3xl font-bold leading-tight tracking-tight text-shamba-ink">
+                  Farming Reels
+                </h1>
               </div>
-            )}
+              <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
+                Short videos and photos from farmers across Shamba Circle.
+              </p>
+            </div>
 
-            <Link
-              href="/communities"
-              className="mt-4 inline-flex items-center justify-center rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep"
-            >
-              Browse all Communities
-            </Link>
-          </div>
-        </main>
-      )}
+            <div className="mt-6 w-full max-w-sm rounded-shamba border border-shamba-line bg-shamba-card p-6">
+              <p className="text-base leading-6 text-shamba-ink-soft">
+                No Reels yet. Share something, or join a community to see posts
+                from other farmers here.
+              </p>
 
-      {!hasError && posts.length > 0 && (
-        <main className="relative flex-1 overflow-hidden">
-          <ReelFeed reels={reels} nextCursor={nextCursor} />
-        </main>
-      )}
+              {suggestedCommunities.length > 0 && (
+                <div className="mt-4 flex flex-col gap-2">
+                  {suggestedCommunities.map((community) => {
+                    const Icon = GROUP_ICON[community.group_name] ?? HelpCircle;
+                    return (
+                      <Link
+                        key={community.id}
+                        href={`/communities/${community.id}`}
+                        className="flex items-center gap-3 rounded-shamba border border-shamba-line bg-shamba-bg p-3 transition-colors hover:border-shamba-green"
+                      >
+                        <Icon className="size-5 shrink-0 text-shamba-green" aria-hidden="true" />
+                        <span className="font-sans text-sm font-medium text-shamba-ink">
+                          {community.name}
+                        </span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
 
-      <FeedComposerLauncher />
-    </div>
+              <Link
+                href="/communities"
+                className="mt-4 inline-flex items-center justify-center rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep"
+              >
+                Browse all Communities
+              </Link>
+            </div>
+          </main>
+        )}
+
+        {!hasError && posts.length > 0 && (
+          <main className="relative flex-1 overflow-hidden">
+            <ReelFeed reels={reels} nextCursor={nextCursor} />
+          </main>
+        )}
+
+        <FeedComposerLauncher />
+      </div>
+    </FeedHeaderVisibilityProvider>
   );
 }
