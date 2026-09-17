@@ -132,6 +132,22 @@ export function StoryViewer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStory?.id]);
 
+  // Records exactly one view per "this Story is now the one being
+  // shown" transition -- keyed on currentStory.id, same as the
+  // auto-advance timer above, so it fires once on mount and again only
+  // when the displayed Story actually changes (never on a bare
+  // re-render, and never once per Story merely existing in the
+  // Stories row). Fire-and-forget: record_story_view is idempotent
+  // (ON CONFLICT DO NOTHING) and this stage builds no UI that reacts to
+  // its result, so nothing here needs to await it, retry it, or surface
+  // its outcome.
+  useEffect(() => {
+    if (!currentStory) return;
+    const supabase = createClient();
+    void supabase.rpc("record_story_view", { p_story_id: currentStory.id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStory?.id]);
+
   // Resets videoProgress/fillStarted the moment currentStory changes --
   // done synchronously during render (the React-documented "adjusting
   // state when a prop changes" pattern) rather than in an effect, since
