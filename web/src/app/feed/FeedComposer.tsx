@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ImagePlus, Loader2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { TOPICS, type Topic } from "./topics";
 
 // Feed-level composer: creates a post with community_id = null (a
 // "Feed post" / future Reel), not tied to any community, so no
@@ -15,10 +16,10 @@ import { createClient } from "@/lib/supabase/client";
 // intentionally mirror PostComposer.tsx's exactly -- not something this
 // stage changes.
 //
-// Structure note for a future stage: the submit handler builds one
-// plain payload object right before the `.insert()` call below -- a
-// required farming topic/category can be added as one more field there
-// later without restructuring this component.
+// Topic is optional (tapping a selected chip again clears it back to
+// no topic) -- posts.topic is nullable and choosing one is never
+// required to post. Community posts are untouched: PostComposer.tsx
+// (communities/[id]) has no topic picker and always posts topic = null.
 const MAX_BODY_LENGTH = 2000;
 const MAX_MEDIA_FILES = 4;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB
@@ -42,6 +43,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [body, setBody] = useState("");
+  const [topic, setTopic] = useState<Topic | null>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -121,7 +123,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
 
       const { data: newPost, error: postError } = await supabase
         .from("posts")
-        .insert({ community_id: null, profile_id: user.id, body: trimmed })
+        .insert({ community_id: null, profile_id: user.id, body: trimmed, topic })
         .select("id")
         .single();
 
@@ -187,6 +189,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
       }
 
       setBody("");
+      setTopic(null);
       setSelectedFiles([]);
       setMediaError(null);
       setStatus({ kind: "success" });
@@ -214,6 +217,28 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
         placeholder="Share a photo, video, or update with every farmer on Shamba Circle…"
         className="w-full rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink placeholder:text-shamba-ink-soft focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
       />
+
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {TOPICS.map((option) => {
+          const isSelected = topic === option;
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setTopic(isSelected ? null : option)}
+              disabled={isLoading}
+              aria-pressed={isSelected}
+              className={
+                isSelected
+                  ? "rounded-full bg-shamba-green px-3 py-1 font-mono text-xs font-semibold text-shamba-card transition-colors disabled:cursor-not-allowed disabled:opacity-70"
+                  : "rounded-full border border-shamba-line px-3 py-1 font-mono text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green disabled:cursor-not-allowed disabled:opacity-70"
+              }
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="mt-2 flex flex-col gap-2">
         <input

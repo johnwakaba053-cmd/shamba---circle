@@ -2,15 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Rss, UserRound } from "lucide-react";
+import { Rss, Tag, UserRound } from "lucide-react";
 import type { Reel } from "./types";
 import { ReelDeleteControl } from "./ReelDeleteControl";
 
-// Bottom-left info block -- author, farming/community context, caption,
-// own-post delete. No profile-picture upload exists in this codebase
-// (public.profiles has no such column, and the public profile page
-// itself falls back to a generic icon), so this stage uses the same
-// generic-icon fallback rather than building avatar upload.
+// Bottom-left info block -- author, farming/community context, optional
+// topic badge, caption, own-post delete. No profile-picture upload
+// exists in this codebase (public.profiles has no such column, and the
+// public profile page itself falls back to a generic icon), so this
+// stage uses the same generic-icon fallback rather than building avatar
+// upload. The topic badge only renders when reel.topic is set --
+// choosing one is optional, so most Reels won't show it.
 const CAPTION_PREVIEW_CHARS = 140;
 
 export function ReelInfo({ reel }: { reel: Reel }) {
@@ -43,6 +45,13 @@ export function ReelInfo({ reel }: { reel: Reel }) {
           <span className="inline-flex items-center gap-1 rounded-full bg-black/30 px-2 py-0.5 font-mono text-xs font-semibold backdrop-blur-sm">
             <Rss className="size-3" aria-hidden="true" />
             Farming Reel
+          </span>
+        )}
+
+        {reel.topic && (
+          <span className="ml-1.5 inline-flex items-center gap-1 rounded-full bg-black/30 px-2 py-0.5 font-mono text-xs font-semibold backdrop-blur-sm">
+            <Tag className="size-3" aria-hidden="true" />
+            {reel.topic}
           </span>
         )}
       </div>

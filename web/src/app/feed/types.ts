@@ -22,6 +22,7 @@ export type Reel = {
   profileId: string;
   authorDisplayName: string;
   body: string;
+  topic: string | null;
   createdAt: string;
   media: PostMediaItem[];
   isAuthor: boolean;

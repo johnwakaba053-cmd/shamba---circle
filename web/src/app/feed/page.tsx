@@ -100,7 +100,7 @@ export default async function Feed({
 
   let postsQuery = supabase
     .from("posts")
-    .select("id, community_id, profile_id, author_display_name, body, created_at")
+    .select("id, community_id, profile_id, author_display_name, body, topic, created_at")
     .or(communityFilter)
     .order("created_at", { ascending: false })
     .limit(PAGE_SIZE + 1);
@@ -215,6 +215,7 @@ export default async function Feed({
       profileId: post.profile_id,
       authorDisplayName: post.author_display_name,
       body: post.body,
+      topic: post.topic,
       createdAt: post.created_at,
       media: postMediaByPostId.get(post.id) ?? [],
       isAuthor: post.profile_id === user.id,
