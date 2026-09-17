@@ -10,6 +10,8 @@ import { FeedHeaderBar, FeedHeaderVisibilityProvider } from "./FeedHeaderVisibil
 import { fetchPostHashtagsByPostId } from "./hashtags";
 import { fetchPostMentionsByPostId } from "./mentions";
 import { ReelFeed } from "./ReelFeed";
+import { fetchActiveStories } from "./stories";
+import { StoriesRow } from "./StoriesRow";
 import type { Reel, ReelComment } from "./types";
 
 export const metadata: Metadata = {
@@ -123,6 +125,11 @@ export default async function Feed({
   const postMediaByPostId = await fetchPostMediaByPostId(supabase, postIds);
   const postHashtagsByPostId = await fetchPostHashtagsByPostId(supabase, postIds);
   const postMentionsByPostId = await fetchPostMentionsByPostId(supabase, postIds);
+
+  // Independent of posts/Reels entirely -- fetched unconditionally here
+  // (cheap, bounded query) and only rendered in the populated-Reels
+  // branch below, per Step 71A's scope.
+  const activeStories = await fetchActiveStories(supabase);
 
   const [
     { data: myLikes },
@@ -300,8 +307,11 @@ export default async function Feed({
         )}
 
         {!hasError && posts.length > 0 && (
-          <main className="absolute inset-0 overflow-hidden">
-            <ReelFeed reels={reels} nextCursor={nextCursor} />
+          <main className="absolute inset-0 flex flex-col overflow-hidden">
+            <StoriesRow stories={activeStories} />
+            <div className="relative flex-1 overflow-hidden">
+              <ReelFeed reels={reels} nextCursor={nextCursor} />
+            </div>
           </main>
         )}
 
