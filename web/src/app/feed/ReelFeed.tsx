@@ -24,7 +24,7 @@ export function ReelFeed({ reels, nextCursor }: { reels: Reel[]; nextCursor: str
   return (
     <div
       onScroll={(event) => reportScrollTop(event.currentTarget.scrollTop)}
-      className="h-full snap-y snap-mandatory overflow-y-auto scroll-smooth [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:bg-shamba-bg"
+      className="h-full snap-y snap-mandatory overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:bg-shamba-bg"
     >
       {reels.map((reel) => (
         <ReelSlide key={reel.id} reel={reel} />

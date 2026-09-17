@@ -230,13 +230,13 @@ export default async function Feed({
 
   return (
     <FeedHeaderVisibilityProvider>
-      <div className="flex h-[100dvh] flex-col overflow-hidden bg-shamba-bg">
+      <div className="relative h-[100dvh] overflow-hidden bg-shamba-bg">
         <FeedHeaderBar>
           <AppHeader />
         </FeedHeaderBar>
 
         {hasError && (
-          <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center overflow-y-auto px-6 pb-20 pt-8 sm:px-10">
+          <main className="absolute inset-0 mx-auto flex w-full max-w-5xl flex-col items-center overflow-y-auto px-6 pb-20 pt-28 sm:px-10 sm:pt-32">
             <p role="alert" className="mt-6 w-full max-w-sm text-sm font-semibold text-shamba-rust">
               We couldn&apos;t load your feed right now. Please try again later.
             </p>
@@ -244,7 +244,7 @@ export default async function Feed({
         )}
 
         {!hasError && posts.length === 0 && (
-          <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center overflow-y-auto px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
+          <main className="absolute inset-0 mx-auto flex w-full max-w-5xl flex-col items-center overflow-y-auto px-6 pb-20 pt-28 sm:px-10 sm:pt-32">
             <div className="w-full max-w-sm">
               <div className="flex items-center gap-2">
                 <Sprout className="size-6 text-shamba-green" aria-hidden="true" />
@@ -294,7 +294,7 @@ export default async function Feed({
         )}
 
         {!hasError && posts.length > 0 && (
-          <main className="relative flex-1 overflow-hidden">
+          <main className="absolute inset-0 overflow-hidden">
             <ReelFeed reels={reels} nextCursor={nextCursor} />
           </main>
         )}

@@ -61,27 +61,36 @@ export function useFeedHeaderVisibility() {
   return context;
 }
 
-// Wraps AppHeader (unmodified, imported as-is by page.tsx) so it can
-// collapse out of flow smoothly. A grid-template-rows 1fr/0fr transition
-// is used instead of a fixed max-height, since AppHeader's own height
-// isn't fixed -- its nav links wrap onto extra lines on narrow
-// viewports -- so this animates to and from whatever its natural height
-// actually is. The sibling flex-1 Reel area in page.tsx reflows to
-// reclaim the freed space in the same motion, so the header never
-// permanently reserves space while hidden. `inert` (not just
-// aria-hidden) also keeps its nav links out of the tab order while
-// collapsed, without needing to touch AppHeader's own internals.
+// Wraps AppHeader (unmodified, imported as-is by page.tsx) as a fixed-
+// height overlay pinned to the top of the Feed shell -- not a normal
+// flex/grid layout participant. It used to collapse via an animated
+// grid-template-rows, which changed its real rendered height on every
+// frame of the transition; because it sat in normal flex flow next to
+// main (flex-1), that resize propagated straight into ReelFeed's
+// scroll-snap container (h-full, sized off main's live height) while
+// the user was actively scrolled into it -- producing a visible jump,
+// worse on upward scroll specifically, since revealing the header
+// shrank the scroll container out from under the user's position
+// mid-gesture. Animating only transform/opacity here means the
+// header's own box never changes size or enters/leaves layout flow at
+// all -- main and ReelFeed stay a fully stable height regardless of
+// `hidden`, so the scroll-snap container is never resized by a scroll
+// event that its own header transition caused. `inert` (not just
+// aria-hidden) keeps its nav links out of the tab order while hidden,
+// and pointer-events-none (on top of translating fully off-screen)
+// stops it from intercepting taps on the Reel below it during the
+// transition -- all without touching AppHeader's own internals.
 export function FeedHeaderBar({ children }: { children: React.ReactNode }) {
   const { hidden } = useFeedHeaderVisibility();
 
   return (
     <div
       inert={hidden}
-      className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
-        hidden ? "grid-rows-[0fr]" : "grid-rows-[1fr]"
+      className={`absolute inset-x-0 top-0 z-40 transition-[transform,opacity] duration-300 ease-in-out ${
+        hidden ? "pointer-events-none -translate-y-full opacity-0" : "translate-y-0 opacity-100"
       }`}
     >
-      <div className="overflow-hidden">{children}</div>
+      {children}
     </div>
   );
 }
