@@ -7,14 +7,23 @@ import type { Reel } from "./types";
 import { ReelDeleteControl } from "./ReelDeleteControl";
 
 // Bottom-left info block -- author, farming/community context, optional
-// topic badge, caption, optional hashtags, own-post delete. No
-// profile-picture upload exists in this codebase (public.profiles has
-// no such column, and the public profile page itself falls back to a
-// generic icon), so this stage uses the same generic-icon fallback
-// rather than building avatar upload. The topic badge only renders
-// when reel.topic is set -- choosing one is optional, so most Reels
-// won't show it.
+// topic badge, caption, optional hashtags, optional mentions, own-post
+// delete. No profile-picture upload exists in this codebase
+// (public.profiles has no such column, and the public profile page
+// itself falls back to a generic icon), so this stage uses the same
+// generic-icon fallback rather than building avatar upload. The topic
+// badge only renders when reel.topic is set -- choosing one is
+// optional, so most Reels won't show it.
 const CAPTION_PREVIEW_CHARS = 140;
+
+// Mentions are rendered as a separate list resolved from the
+// structured post_mentions relationship (reel.mentions, assembled
+// server-side in page.tsx via get_public_profile) -- never by parsing
+// "@Name" text back out of the caption, which would be fragile and
+// ambiguous given display names aren't unique. A null displayName
+// means this viewer can no longer resolve that profile (it's since
+// gone private) -- rendered as a generic placeholder rather than any
+// stale name, so a mention never leaks who a now-private profile is.
 
 // Hashtags render as plain muted text (no pill background), smaller
 // and lighter than the caption, so they stay visually secondary to the
@@ -99,6 +108,29 @@ export function ReelInfo({ reel }: { reel: Reel }) {
             <span className="font-mono text-xs text-shamba-card/60 drop-shadow">
               +{reel.hashtags.length - MAX_VISIBLE_HASHTAGS} more
             </span>
+          )}
+        </div>
+      )}
+
+      {reel.mentions.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1">
+          {reel.mentions.map((mention) =>
+            mention.displayName ? (
+              <Link
+                key={mention.profileId}
+                href={`/profile/${mention.profileId}`}
+                className="font-mono text-xs text-shamba-card/80 drop-shadow transition-colors hover:text-shamba-green"
+              >
+                @{mention.displayName}
+              </Link>
+            ) : (
+              <span
+                key={mention.profileId}
+                className="font-mono text-xs text-shamba-card/60 drop-shadow"
+              >
+                @a Shamba Circle member
+              </span>
+            ),
           )}
         </div>
       )}

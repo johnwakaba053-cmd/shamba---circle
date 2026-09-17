@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { Camera, ImagePlus, Loader2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { parseHashtagInput } from "./hashtags";
+import {
+  detectActiveMentionQuery,
+  MAX_MENTIONS_PER_POST,
+  searchMentionCandidates,
+  type ActiveMentionQuery,
+  type MentionCandidate,
+} from "./mentions";
 import { TOPICS, type Topic } from "./topics";
 
 // Feed-level composer: creates a post with community_id = null (a
@@ -27,6 +34,16 @@ import { TOPICS, type Topic } from "./topics";
 // same string used for the live preview pills below, so what's
 // previewed is exactly what gets saved. Community posts get no
 // hashtags either, for the same reason as topic above.
+//
+// Mentions are optional too and stored as a structured list
+// (selectedMentions) kept separate from the caption text, per
+// mentions.ts -- typing "@John" inserts "@John Wakaba " into the
+// caption as a visible label, but the actual data that gets saved is
+// the resolved profile UUID in selectedMentions, never re-parsed out
+// of the caption text. That decoupling is deliberate: it's what makes
+// resolving a mentioned profile's *current* privacy state possible
+// later (see ReelInfo.tsx), instead of trusting a name frozen at post
+// time.
 const MAX_BODY_LENGTH = 2000;
 const MAX_MEDIA_FILES = 4;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB
@@ -49,9 +66,14 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
   const router = useRouter();
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [body, setBody] = useState("");
   const [topic, setTopic] = useState<Topic | null>(null);
   const [hashtagInput, setHashtagInput] = useState("");
+  const [selectedMentions, setSelectedMentions] = useState<MentionCandidate[]>([]);
+  const [activeMention, setActiveMention] = useState<ActiveMentionQuery | null>(null);
+  const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
+  const [mentionSearchLoading, setMentionSearchLoading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -60,6 +82,37 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
   const trimmedLength = body.trim().length;
   const remaining = MAX_BODY_LENGTH - body.length;
   const parsedHashtags = useMemo(() => parseHashtagInput(hashtagInput), [hashtagInput]);
+
+  // Debounced @mention search -- fires whenever the active query
+  // changes (including becoming an empty string right after typing
+  // "@", which search_public_profiles handles safely). Already-selected
+  // profiles are filtered out of the results so the same person can't
+  // be picked twice.
+  useEffect(() => {
+    if (activeMention === null) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const timeoutId = setTimeout(async () => {
+      setMentionSearchLoading(true);
+      const supabase = createClient();
+      const results = await searchMentionCandidates(supabase, activeMention.query);
+      if (cancelled) return;
+      setMentionCandidates(
+        results.filter((candidate) =>
+          selectedMentions.every((selected) => selected.profileId !== candidate.profileId),
+        ),
+      );
+      setMentionSearchLoading(false);
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+    };
+  }, [activeMention, selectedMentions]);
 
   const previewUrls = useMemo(
     () => selectedFiles.map((file) => URL.createObjectURL(file)),
@@ -104,6 +157,61 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
   function removeFile(index: number) {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
     setMediaError(null);
+  }
+
+  function handleBodyChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
+    const nextValue = event.target.value.slice(0, MAX_BODY_LENGTH);
+    setBody(nextValue);
+    const cursorPos = event.target.selectionStart ?? nextValue.length;
+    const nextActiveMention = detectActiveMentionQuery(nextValue, cursorPos);
+    setActiveMention(nextActiveMention);
+    // Clear stale results from any previous query immediately (this is
+    // an event handler, not an effect, so it's safe to do synchronously)
+    // rather than showing the last query's candidates while the new
+    // debounced search is still in flight.
+    setMentionCandidates([]);
+    setMentionSearchLoading(nextActiveMention !== null);
+  }
+
+  function handleBodyKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Escape" && activeMention !== null) {
+      event.stopPropagation();
+      setActiveMention(null);
+    }
+  }
+
+  function selectMentionCandidate(candidate: MentionCandidate) {
+    if (activeMention === null) return;
+
+    if (selectedMentions.some((selected) => selected.profileId === candidate.profileId)) {
+      setActiveMention(null);
+      return;
+    }
+
+    const insertText = `@${candidate.displayName} `;
+    const before = body.slice(0, activeMention.start);
+    const after = body.slice(activeMention.start + 1 + activeMention.query.length);
+    const nextBody = `${before}${insertText}${after}`.slice(0, MAX_BODY_LENGTH);
+
+    setBody(nextBody);
+    setSelectedMentions((prev) => [...prev, candidate].slice(0, MAX_MENTIONS_PER_POST));
+    setActiveMention(null);
+
+    // React commits the body state update to the textarea's DOM value
+    // synchronously before the next paint, so the cursor position it's
+    // restored to here is already correct by the time this callback runs.
+    const cursorPos = Math.min(before.length + insertText.length, MAX_BODY_LENGTH);
+    requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(cursorPos, cursorPos);
+      }
+    });
+  }
+
+  function removeMention(profileId: string) {
+    setSelectedMentions((prev) => prev.filter((mention) => mention.profileId !== profileId));
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -191,6 +299,26 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
         }
       }
 
+      if (selectedMentions.length > 0) {
+        const mentionRows = selectedMentions.map((mention) => ({
+          post_id: newPost.id,
+          mentioned_profile_id: mention.profileId,
+        }));
+
+        const { error: mentionInsertError } = await supabase
+          .from("post_mentions")
+          .insert(mentionRows);
+
+        if (mentionInsertError) {
+          await supabase.from("posts").delete().eq("id", newPost.id).eq("profile_id", user.id);
+          setStatus({
+            kind: "error",
+            message: "We couldn't save your mentions. Please try again.",
+          });
+          return;
+        }
+      }
+
       if (selectedFiles.length > 0) {
         const uploadedPaths: string[] = [];
         let uploadFailed = false;
@@ -247,6 +375,9 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
       setBody("");
       setTopic(null);
       setHashtagInput("");
+      setSelectedMentions([]);
+      setActiveMention(null);
+      setMentionCandidates([]);
       setSelectedFiles([]);
       setMediaError(null);
       setStatus({ kind: "success" });
@@ -266,14 +397,75 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
       className="w-full max-w-sm rounded-shamba border border-shamba-line bg-shamba-card p-4"
     >
       <textarea
+        ref={textareaRef}
         value={body}
-        onChange={(event) => setBody(event.target.value.slice(0, MAX_BODY_LENGTH))}
+        onChange={handleBodyChange}
+        onKeyDown={handleBodyKeyDown}
         disabled={isLoading}
         rows={3}
         maxLength={MAX_BODY_LENGTH}
-        placeholder="Share a photo, video, or update with every farmer on Shamba Circle…"
+        placeholder="Share a photo, video, or update with every farmer on Shamba Circle… Type @ to mention someone."
         className="w-full rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink placeholder:text-shamba-ink-soft focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
       />
+
+      {activeMention !== null && (
+        <div className="mt-1.5 rounded-shamba border border-shamba-line bg-shamba-bg">
+          {mentionSearchLoading && mentionCandidates.length === 0 && (
+            <p className="px-3 py-2 font-mono text-xs text-shamba-ink-soft">Searching…</p>
+          )}
+
+          {!mentionSearchLoading && mentionCandidates.length === 0 && (
+            <p className="px-3 py-2 font-mono text-xs text-shamba-ink-soft">
+              No matching members found.
+            </p>
+          )}
+
+          {mentionCandidates.length > 0 && (
+            <ul className="max-h-48 overflow-y-auto py-1">
+              {mentionCandidates.map((candidate) => (
+                <li key={candidate.profileId}>
+                  <button
+                    type="button"
+                    onClick={() => selectMentionCandidate(candidate)}
+                    className="flex w-full flex-col items-start px-3 py-2 text-left transition-colors hover:bg-shamba-card"
+                  >
+                    <span className="font-sans text-sm font-semibold text-shamba-ink">
+                      {candidate.displayName}
+                    </span>
+                    {candidate.roles.length > 0 && (
+                      <span className="font-mono text-xs text-shamba-ink-soft">
+                        {candidate.roles.join(", ")}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {selectedMentions.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {selectedMentions.map((mention) => (
+            <span
+              key={mention.profileId}
+              className="inline-flex items-center gap-1 rounded-full border border-shamba-line px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft"
+            >
+              @{mention.displayName}
+              <button
+                type="button"
+                onClick={() => removeMention(mention.profileId)}
+                disabled={isLoading}
+                aria-label={`Remove mention of ${mention.displayName}`}
+                className="text-shamba-ink-soft transition-colors hover:text-shamba-rust disabled:cursor-not-allowed"
+              >
+                <X className="size-3" aria-hidden="true" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="mt-2 flex flex-wrap gap-1.5">
         {TOPICS.map((option) => {

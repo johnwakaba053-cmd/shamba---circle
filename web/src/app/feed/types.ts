@@ -1,4 +1,5 @@
 import type { PostMediaItem } from "@/lib/postMedia";
+import type { ReelMention } from "./mentions";
 
 // Shared shape for the vertical Reel viewer. Assembled once, server-side,
 // in page.tsx from the same queries the previous card-based feed used --
@@ -24,6 +25,7 @@ export type Reel = {
   body: string;
   topic: string | null;
   hashtags: string[];
+  mentions: ReelMention[];
   createdAt: string;
   media: PostMediaItem[];
   isAuthor: boolean;
