@@ -121,6 +121,10 @@ export type StoryDetail = {
   displayName: string | null;
   mediaType: "image" | "video";
   mediaUrl: string | null;
+  // The raw storage object path (not the signed mediaUrl above) -- the
+  // only thing StoryViewer's delete control needs it for is passing it
+  // straight to storage.remove(), which takes a path, not a URL.
+  mediaPath: string;
   caption: string | null;
   topic: string | null;
   hashtags: string[];
@@ -232,6 +236,7 @@ export async function fetchCreatorActiveStories(
     displayName,
     mediaType: row.media_type === "video" ? "video" : "image",
     mediaUrl: urlByStoryId.get(row.id) ?? null,
+    mediaPath: row.media_path,
     caption: row.caption,
     topic: row.topic,
     hashtags: hashtagsByStoryId.get(row.id) ?? [],

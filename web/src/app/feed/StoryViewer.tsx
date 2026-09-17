@@ -2,7 +2,19 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Loader2, Rss, Tag, UserRound, Volume2, VolumeX, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Rss,
+  Tag,
+  Trash2,
+  UserRound,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { fetchCreatorActiveStories, type ActiveStory, type StoryDetail } from "./stories";
 
@@ -26,6 +38,12 @@ const IMAGE_STORY_DURATION_MS = 5000;
 
 type PendingEdge = "start" | "end";
 
+type DeleteStatus =
+  | { kind: "idle" }
+  | { kind: "confirming" }
+  | { kind: "deleting" }
+  | { kind: "error"; message: string };
+
 export function StoryViewer({
   creators,
   initialCreatorIndex,
@@ -35,6 +53,7 @@ export function StoryViewer({
   initialCreatorIndex: number;
   onClose: () => void;
 }) {
+  const router = useRouter();
   const dialogRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const pendingEdgeRef = useRef<PendingEdge>("start");
@@ -45,8 +64,28 @@ export function StoryViewer({
   const [captionExpanded, setCaptionExpanded] = useState(false);
   const [muted, setMuted] = useState(true);
   const [videoProgress, setVideoProgress] = useState(0);
+  const [viewerProfileId, setViewerProfileId] = useState<string | null>(null);
+  const [deleteStatus, setDeleteStatus] = useState<DeleteStatus>({ kind: "idle" });
 
   const currentStory = stories?.[storyIndex] ?? null;
+  const isOwnStory = viewerProfileId !== null && currentStory?.profileId === viewerProfileId;
+  // Covers "confirming", "deleting", AND "error" -- the confirmation
+  // overlay stays open (showing the error, with Cancel/Delete still
+  // available to retry) until the user explicitly cancels or a delete
+  // actually succeeds, so navigation stays blocked for all three.
+  const isDeleteOverlayOpen = deleteStatus.kind !== "idle";
+
+  // Fetched once on mount, purely to decide whether *this* viewer sees
+  // a delete control at all -- the real security boundary is
+  // delete_my_story()'s own auth.uid() check server-side, not this
+  // client-side comparison, which only controls whether the button
+  // renders.
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      setViewerProfileId(data.user?.id ?? null);
+    });
+  }, []);
 
   // Lock background scroll while open -- same pattern as
   // MediaViewer.tsx/ReelCommentsSheet.tsx.
@@ -102,7 +141,11 @@ export function StoryViewer({
   }, []);
 
   function goToNext() {
-    if (!stories) return;
+    // Blocked while a delete confirmation/attempt is in progress -- an
+    // auto-advance or tap-zone navigation firing mid-confirmation would
+    // yank the confirm UI out from under the user, or navigate away
+    // during the delete call itself.
+    if (!stories || isDeleteOverlayOpen) return;
     if (storyIndex < stories.length - 1) {
       setStoryIndex((index) => index + 1);
       setCaptionExpanded(false);
@@ -112,7 +155,7 @@ export function StoryViewer({
   }
 
   function goToPrevious() {
-    if (!stories) return;
+    if (!stories || isDeleteOverlayOpen) return;
     if (storyIndex > 0) {
       setStoryIndex((index) => index - 1);
       setCaptionExpanded(false);
@@ -176,12 +219,82 @@ export function StoryViewer({
 
   function handleDialogKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Escape") {
-      onClose();
+      // Escape backs out of the confirmation step first, rather than
+      // closing the whole viewer out from under a pending destructive
+      // action; it's a no-op while the delete call itself is in flight.
+      if (deleteStatus.kind === "confirming" || deleteStatus.kind === "error") {
+        setDeleteStatus({ kind: "idle" });
+      } else if (deleteStatus.kind === "idle") {
+        onClose();
+      }
     } else if (event.key === "ArrowRight") {
       goToNext();
     } else if (event.key === "ArrowLeft") {
       goToPrevious();
     }
+  }
+
+  // Removes the just-deleted Story from this viewer's own local state
+  // and lands on the next sensible place to be -- the next remaining
+  // Story for the same creator, the next creator (reusing openCreator's
+  // existing "this creator has nothing active" skip logic), or closed
+  // entirely if nothing is left anywhere. router.refresh() is
+  // fire-and-forget here: it re-fetches page.tsx's server-side
+  // activeStories so StoriesRow's own bubble list (and, via its
+  // existing findIndex check, "Your Story"'s creation-vs-viewer routing)
+  // catches up once it next renders -- it does not block or delay the
+  // viewer's own immediate, already-updated local state.
+  function removeCurrentStoryAndAdvance(deletedStoryId: string) {
+    router.refresh();
+
+    setCaptionExpanded(false);
+    setDeleteStatus({ kind: "idle" });
+
+    // Read `stories` from this render's closure rather than a setState
+    // updater callback: openCreator below has its own side effects
+    // (fetching, further setState calls), which must never run from
+    // inside a setState updater. This is safe to read directly --
+    // navigation is blocked by isDeleteOverlayOpen for the entire
+    // confirm/delete window, so nothing else can have changed `stories`
+    // in the meantime.
+    const remaining = (stories ?? []).filter((story) => story.id !== deletedStoryId);
+
+    if (remaining.length === 0) {
+      setStories(null);
+      openCreator(creatorIndex + 1, "start");
+      return;
+    }
+
+    setStoryIndex((index) => Math.min(index, remaining.length - 1));
+    setStories(remaining);
+  }
+
+  async function handleConfirmDelete() {
+    if (!currentStory || deleteStatus.kind === "deleting") return;
+
+    setDeleteStatus({ kind: "deleting" });
+
+    const supabase = createClient();
+    const { data: deleted, error } = await supabase.rpc("delete_my_story", {
+      p_story_id: currentStory.id,
+    });
+
+    if (error || !deleted) {
+      setDeleteStatus({
+        kind: "error",
+        message: "We couldn't delete that Story. Please try again.",
+      });
+      return;
+    }
+
+    // Best-effort storage cleanup -- the database row (the authoritative
+    // record) is already gone at this point, so a failure here only
+    // ever leaves behind an orphaned object nothing in the app links to
+    // or can render again, never a broken/dangling Story. Deliberately
+    // not awaited-and-blocking the UI transition below on it.
+    void supabase.storage.from("story-media").remove([currentStory.mediaPath]);
+
+    removeCurrentStoryAndAdvance(currentStory.id);
   }
 
   const isLongCaption = (currentStory?.caption?.length ?? 0) > 140;
@@ -295,11 +408,23 @@ export function StoryViewer({
                     )}
                   </button>
                 )}
+                {isOwnStory && (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteStatus({ kind: "confirming" })}
+                    disabled={isDeleteOverlayOpen}
+                    aria-label="Delete story"
+                    className="inline-flex size-8 items-center justify-center rounded-full bg-black/30 text-shamba-card backdrop-blur-sm disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    <Trash2 className="size-4" aria-hidden="true" />
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={onClose}
                   aria-label="Close Story"
-                  className="inline-flex size-8 items-center justify-center rounded-full bg-black/30 text-shamba-card backdrop-blur-sm"
+                  disabled={deleteStatus.kind === "deleting"}
+                  className="inline-flex size-8 items-center justify-center rounded-full bg-black/30 text-shamba-card backdrop-blur-sm disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   <X className="size-4" aria-hidden="true" />
                 </button>
@@ -405,6 +530,51 @@ export function StoryViewer({
                 </div>
               )}
             </div>
+
+            {/* Delete confirmation -- a full-cover overlay rather than a
+                second stacked dialog, so it also visually and
+                functionally blocks the tap zones/auto-advance behind it
+                (goToNext/goToPrevious additionally no-op while this is
+                open, as a second layer of protection, not the only
+                one). Only ever reachable via the owner-only Trash2
+                button above, but isOwnStory is a display-only check --
+                delete_my_story()'s own auth.uid() check is the actual
+                security boundary. */}
+            {isDeleteOverlayOpen && (
+              <div className="absolute inset-0 z-30 flex items-end justify-center bg-black/70 p-4 sm:items-center">
+                <div className="w-full max-w-xs rounded-shamba bg-shamba-card p-4 text-center">
+                  <p className="font-sans text-sm font-semibold text-shamba-ink">
+                    Delete this story?
+                  </p>
+                  {deleteStatus.kind === "error" && (
+                    <p role="alert" className="mt-1.5 font-sans text-xs font-semibold text-shamba-rust">
+                      {deleteStatus.message}
+                    </p>
+                  )}
+                  <div className="mt-3 flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteStatus({ kind: "idle" })}
+                      disabled={deleteStatus.kind === "deleting"}
+                      className="inline-flex items-center justify-center rounded-shamba px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmDelete}
+                      disabled={deleteStatus.kind === "deleting"}
+                      className="inline-flex items-center justify-center gap-2 rounded-shamba bg-shamba-rust px-4 py-2 font-sans text-sm font-semibold text-shamba-card transition-colors hover:bg-shamba-rust/85 disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      {deleteStatus.kind === "deleting" && (
+                        <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                      )}
+                      {deleteStatus.kind === "deleting" ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
