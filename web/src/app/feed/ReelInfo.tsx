@@ -7,13 +7,22 @@ import type { Reel } from "./types";
 import { ReelDeleteControl } from "./ReelDeleteControl";
 
 // Bottom-left info block -- author, farming/community context, optional
-// topic badge, caption, own-post delete. No profile-picture upload
-// exists in this codebase (public.profiles has no such column, and the
-// public profile page itself falls back to a generic icon), so this
-// stage uses the same generic-icon fallback rather than building avatar
-// upload. The topic badge only renders when reel.topic is set --
-// choosing one is optional, so most Reels won't show it.
+// topic badge, caption, optional hashtags, own-post delete. No
+// profile-picture upload exists in this codebase (public.profiles has
+// no such column, and the public profile page itself falls back to a
+// generic icon), so this stage uses the same generic-icon fallback
+// rather than building avatar upload. The topic badge only renders
+// when reel.topic is set -- choosing one is optional, so most Reels
+// won't show it.
 const CAPTION_PREVIEW_CHARS = 140;
+
+// Hashtags render as plain muted text (no pill background), smaller
+// and lighter than the caption, so they stay visually secondary to the
+// Reel itself. Capped independently of FeedComposer's own input cap
+// (hashtags.ts's MAX_HASHTAGS_PER_POST) so display stays bounded even
+// if a Reel somehow has more -- a long tail collapses to "+N more"
+// instead of growing the info block indefinitely.
+const MAX_VISIBLE_HASHTAGS = 6;
 
 export function ReelInfo({ reel }: { reel: Reel }) {
   const [expanded, setExpanded] = useState(false);
@@ -75,6 +84,21 @@ export function ReelInfo({ reel }: { reel: Reel }) {
             >
               {expanded ? "Show less" : "Show more"}
             </button>
+          )}
+        </div>
+      )}
+
+      {reel.hashtags.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1">
+          {reel.hashtags.slice(0, MAX_VISIBLE_HASHTAGS).map((tag) => (
+            <span key={tag} className="font-mono text-xs text-shamba-card/80 drop-shadow">
+              #{tag}
+            </span>
+          ))}
+          {reel.hashtags.length > MAX_VISIBLE_HASHTAGS && (
+            <span className="font-mono text-xs text-shamba-card/60 drop-shadow">
+              +{reel.hashtags.length - MAX_VISIBLE_HASHTAGS} more
+            </span>
           )}
         </div>
       )}

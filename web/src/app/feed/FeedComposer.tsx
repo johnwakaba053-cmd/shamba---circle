@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ImagePlus, Loader2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { parseHashtagInput } from "./hashtags";
 import { TOPICS, type Topic } from "./topics";
 
 // Feed-level composer: creates a post with community_id = null (a
@@ -20,6 +21,12 @@ import { TOPICS, type Topic } from "./topics";
 // no topic) -- posts.topic is nullable and choosing one is never
 // required to post. Community posts are untouched: PostComposer.tsx
 // (communities/[id]) has no topic picker and always posts topic = null.
+//
+// Hashtags are also optional and independent of topic -- a plain text
+// field, parsed with hashtags.ts's parseHashtagInput off the exact
+// same string used for the live preview pills below, so what's
+// previewed is exactly what gets saved. Community posts get no
+// hashtags either, for the same reason as topic above.
 const MAX_BODY_LENGTH = 2000;
 const MAX_MEDIA_FILES = 4;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB
@@ -44,6 +51,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const [body, setBody] = useState("");
   const [topic, setTopic] = useState<Topic | null>(null);
+  const [hashtagInput, setHashtagInput] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [mediaError, setMediaError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
@@ -51,6 +59,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
   const isLoading = status.kind === "loading";
   const trimmedLength = body.trim().length;
   const remaining = MAX_BODY_LENGTH - body.length;
+  const parsedHashtags = useMemo(() => parseHashtagInput(hashtagInput), [hashtagInput]);
 
   const previewUrls = useMemo(
     () => selectedFiles.map((file) => URL.createObjectURL(file)),
@@ -135,6 +144,53 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
         return;
       }
 
+      if (parsedHashtags.length > 0) {
+        const normalizedNames = parsedHashtags.map((tag) => tag.normalized);
+
+        // Get-or-create: insert any never-seen terms (ignoreDuplicates
+        // skips ones that already exist rather than erroring or
+        // renaming them -- there's no UPDATE policy on hashtags at
+        // all), then a plain select fetches ids for both the
+        // just-inserted and the already-existing terms in one pass.
+        const { error: hashtagUpsertError } = await supabase.from("hashtags").upsert(
+          parsedHashtags.map((tag) => ({ name: tag.display, normalized_name: tag.normalized })),
+          { onConflict: "normalized_name", ignoreDuplicates: true },
+        );
+
+        let hashtagsFailed = Boolean(hashtagUpsertError);
+
+        if (!hashtagsFailed) {
+          const { data: hashtagRows, error: hashtagSelectError } = await supabase
+            .from("hashtags")
+            .select("id")
+            .in("normalized_name", normalizedNames);
+
+          if (hashtagSelectError || !hashtagRows || hashtagRows.length === 0) {
+            hashtagsFailed = true;
+          } else {
+            const postHashtagRows = hashtagRows.map((row) => ({
+              post_id: newPost.id,
+              hashtag_id: row.id,
+            }));
+
+            const { error: postHashtagInsertError } = await supabase
+              .from("post_hashtags")
+              .insert(postHashtagRows);
+
+            hashtagsFailed = Boolean(postHashtagInsertError);
+          }
+        }
+
+        if (hashtagsFailed) {
+          await supabase.from("posts").delete().eq("id", newPost.id).eq("profile_id", user.id);
+          setStatus({
+            kind: "error",
+            message: "We couldn't save your hashtags. Please try again.",
+          });
+          return;
+        }
+      }
+
       if (selectedFiles.length > 0) {
         const uploadedPaths: string[] = [];
         let uploadFailed = false;
@@ -190,6 +246,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
 
       setBody("");
       setTopic(null);
+      setHashtagInput("");
       setSelectedFiles([]);
       setMediaError(null);
       setStatus({ kind: "success" });
@@ -238,6 +295,30 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
             </button>
           );
         })}
+      </div>
+
+      <div className="mt-2">
+        <input
+          type="text"
+          value={hashtagInput}
+          onChange={(event) => setHashtagInput(event.target.value)}
+          disabled={isLoading}
+          placeholder="Add hashtags, e.g. #Avocado #Kiambu"
+          className="w-full rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-2 font-sans text-sm text-shamba-ink placeholder:text-shamba-ink-soft focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
+        />
+
+        {parsedHashtags.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {parsedHashtags.map((tag) => (
+              <span
+                key={tag.normalized}
+                className="rounded-full border border-shamba-line px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft"
+              >
+                #{tag.display}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="mt-2 flex flex-col gap-2">

@@ -23,6 +23,7 @@ export type Reel = {
   authorDisplayName: string;
   body: string;
   topic: string | null;
+  hashtags: string[];
   createdAt: string;
   media: PostMediaItem[];
   isAuthor: boolean;

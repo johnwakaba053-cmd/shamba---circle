@@ -7,6 +7,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { fetchPostMediaByPostId } from "@/lib/postMedia";
 import { FeedComposerLauncher } from "./FeedComposerLauncher";
 import { FeedHeaderBar, FeedHeaderVisibilityProvider } from "./FeedHeaderVisibility";
+import { fetchPostHashtagsByPostId } from "./hashtags";
 import { ReelFeed } from "./ReelFeed";
 import type { Reel, ReelComment } from "./types";
 
@@ -119,6 +120,7 @@ export default async function Feed({
   const authorIds = Array.from(new Set(posts.map((post) => post.profile_id)));
 
   const postMediaByPostId = await fetchPostMediaByPostId(supabase, postIds);
+  const postHashtagsByPostId = await fetchPostHashtagsByPostId(supabase, postIds);
 
   const [
     { data: myLikes },
@@ -216,6 +218,7 @@ export default async function Feed({
       authorDisplayName: post.author_display_name,
       body: post.body,
       topic: post.topic,
+      hashtags: postHashtagsByPostId.get(post.id) ?? [],
       createdAt: post.created_at,
       media: postMediaByPostId.get(post.id) ?? [],
       isAuthor: post.profile_id === user.id,
