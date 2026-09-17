@@ -307,7 +307,7 @@ export default async function Feed({
         )}
 
         {!hasError && posts.length > 0 && (
-          <main className="absolute inset-0 flex flex-col overflow-hidden">
+          <main className="absolute inset-0 flex flex-col overflow-hidden pt-44 sm:pt-28">
             <StoriesRow stories={activeStories} />
             <div className="relative flex-1 overflow-hidden">
               <ReelFeed reels={reels} nextCursor={nextCursor} />
