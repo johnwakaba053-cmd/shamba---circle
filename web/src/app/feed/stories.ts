@@ -95,3 +95,147 @@ export async function fetchActiveStories(supabase: SupabaseClient): Promise<Acti
     thumbnailUrl: thumbnailByStoryId.get(story.id) ?? null,
   }));
 }
+
+// === viewer support (Step 71C) =============================================
+//
+// fetchActiveStories above stays exactly as it was -- it's the "one
+// bubble per creator" fetch StoriesRow needs, and nothing here changes
+// its behavior or shape. The viewer needs something fetchActiveStories
+// deliberately doesn't provide: a specific creator's *entire* active
+// sequence, with full per-Story detail (caption/topic/hashtags/mentions
+// and a playable signed URL for video too, not just an image
+// thumbnail). Rather than bolt that onto the row's lighter fetch (which
+// would make every page load resolve full detail for every creator,
+// most of whom will never actually be opened), this is a second,
+// narrower function called on demand, client-side, only once a specific
+// creator's bubble (or "Your Story") is actually tapped.
+
+export type StoryMention = {
+  profileId: string;
+  displayName: string | null;
+};
+
+export type StoryDetail = {
+  id: string;
+  profileId: string;
+  displayName: string | null;
+  mediaType: "image" | "video";
+  mediaUrl: string | null;
+  caption: string | null;
+  topic: string | null;
+  hashtags: string[];
+  mentions: StoryMention[];
+  createdAt: string;
+};
+
+type StoryDetailRow = {
+  id: string;
+  profile_id: string;
+  media_type: string;
+  media_path: string;
+  caption: string | null;
+  topic: string | null;
+  created_at: string;
+};
+
+// Fetches one creator's full active Story sequence, oldest first (the
+// order the viewer progresses through). expires_at is re-checked fresh
+// here -- this is the authoritative "is this still active" read the
+// viewer relies on, never the (potentially stale, fetched at page-load
+// time) StoriesRow data.
+export async function fetchCreatorActiveStories(
+  supabase: SupabaseClient,
+  profileId: string,
+): Promise<StoryDetail[]> {
+  const { data: rows } = await supabase
+    .from("stories")
+    .select("id, profile_id, media_type, media_path, caption, topic, created_at")
+    .eq("profile_id", profileId)
+    .gt("expires_at", new Date().toISOString())
+    .order("created_at", { ascending: true });
+
+  const typedRows = (rows ?? []) as StoryDetailRow[];
+  if (typedRows.length === 0) {
+    return [];
+  }
+
+  const storyIds = typedRows.map((row) => row.id);
+
+  const [profileResult, hashtagRowsResult, mentionRowsResult, signedUrlResults] =
+    await Promise.all([
+      supabase.rpc("get_public_profile", { p_profile_id: profileId }),
+      supabase.from("story_hashtags").select("story_id, hashtags (name)").in("story_id", storyIds),
+      supabase.from("story_mentions").select("story_id, mentioned_profile_id").in("story_id", storyIds),
+      Promise.all(
+        typedRows.map((row) =>
+          supabase.storage
+            .from("story-media")
+            .createSignedUrl(row.media_path, STORY_MEDIA_SIGNED_URL_EXPIRY_SECONDS),
+        ),
+      ),
+    ]);
+
+  const displayName =
+    (profileResult.data as { display_name: string | null }[] | null)?.[0]?.display_name ?? null;
+
+  // Same embed-shape caveat as fetchPostHashtagsByPostId (hashtags.ts):
+  // PostgREST returns a single nested object for this to-one embed, but
+  // supabase-js widens the inferred type to an array without generated
+  // Database types.
+  const hashtagRows = (hashtagRowsResult.data ?? []) as unknown as {
+    story_id: string;
+    hashtags: { name: string } | null;
+  }[];
+  const hashtagsByStoryId = new Map<string, string[]>();
+  for (const row of hashtagRows) {
+    const name = row.hashtags?.name;
+    if (!name) continue;
+    const existing = hashtagsByStoryId.get(row.story_id) ?? [];
+    existing.push(name);
+    hashtagsByStoryId.set(row.story_id, existing);
+  }
+
+  // Mentions need their own distinct-profile resolution pass, same
+  // shape as fetchPostMentionsByPostId (mentions.ts).
+  const mentionRows = (mentionRowsResult.data ?? []) as {
+    story_id: string;
+    mentioned_profile_id: string;
+  }[];
+  const distinctMentionedIds = Array.from(new Set(mentionRows.map((row) => row.mentioned_profile_id)));
+  const mentionProfileResults = await Promise.all(
+    distinctMentionedIds.map((id) => supabase.rpc("get_public_profile", { p_profile_id: id })),
+  );
+  const mentionNameById = new Map<string, string | null>();
+  distinctMentionedIds.forEach((id, index) => {
+    const row = (mentionProfileResults[index]?.data as { display_name: string | null }[] | null)?.[0];
+    mentionNameById.set(id, row?.display_name ?? null);
+  });
+  const mentionsByStoryId = new Map<string, StoryMention[]>();
+  for (const row of mentionRows) {
+    const existing = mentionsByStoryId.get(row.story_id) ?? [];
+    existing.push({
+      profileId: row.mentioned_profile_id,
+      displayName: mentionNameById.get(row.mentioned_profile_id) ?? null,
+    });
+    mentionsByStoryId.set(row.story_id, existing);
+  }
+
+  const urlByStoryId = new Map<string, string>();
+  typedRows.forEach((row, index) => {
+    const url = signedUrlResults[index]?.data?.signedUrl;
+    if (url) urlByStoryId.set(row.id, url);
+  });
+
+  return typedRows.map((row) => ({
+    id: row.id,
+    profileId: row.profile_id,
+    displayName,
+    mediaType: row.media_type === "video" ? "video" : "image",
+    mediaUrl: urlByStoryId.get(row.id) ?? null,
+    caption: row.caption,
+    topic: row.topic,
+    hashtags: hashtagsByStoryId.get(row.id) ?? [],
+    mentions: mentionsByStoryId.get(row.id) ?? [],
+    createdAt: row.created_at,
+  }));
+}

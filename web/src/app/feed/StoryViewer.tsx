@@ -1,0 +1,397 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { ChevronLeft, ChevronRight, Loader2, Rss, Tag, UserRound, Volume2, VolumeX, X } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { fetchCreatorActiveStories, type ActiveStory, type StoryDetail } from "./stories";
+
+// Full-screen Story viewer -- deliberately isolated from ReelFeed.tsx/
+// ReelSlide.tsx/ReelInteractionRail.tsx (no shared code, no shared
+// state, no changes to any of them). It's a plain fixed-position
+// overlay, the same category of thing as MediaViewer.tsx/
+// ReelCommentsSheet.tsx already are, not a second vertical scroll
+// container: no scroll-snap, no window scroll listeners, no layout-
+// height animation anywhere near the Reel viewport.
+//
+// `creators` is StoriesRow's own already-fetched, already-ordered
+// `stories` array (one entry per creator) -- reused as-is for
+// cross-creator navigation order, not refetched. What *is* fetched
+// fresh here, per creator, is that creator's full active Story
+// sequence via fetchCreatorActiveStories -- this is the authoritative,
+// just-in-time expiry check (StoriesRow's own data can be stale by the
+// time a bubble is actually tapped); a creator who no longer has any
+// active Story is skipped over automatically rather than shown.
+const IMAGE_STORY_DURATION_MS = 5000;
+
+type PendingEdge = "start" | "end";
+
+export function StoryViewer({
+  creators,
+  initialCreatorIndex,
+  onClose,
+}: {
+  creators: ActiveStory[];
+  initialCreatorIndex: number;
+  onClose: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const pendingEdgeRef = useRef<PendingEdge>("start");
+
+  const [creatorIndex, setCreatorIndex] = useState(initialCreatorIndex);
+  const [stories, setStories] = useState<StoryDetail[] | null>(null);
+  const [storyIndex, setStoryIndex] = useState(0);
+  const [captionExpanded, setCaptionExpanded] = useState(false);
+  const [muted, setMuted] = useState(true);
+  const [videoProgress, setVideoProgress] = useState(0);
+
+  const currentStory = stories?.[storyIndex] ?? null;
+
+  // Lock background scroll while open -- same pattern as
+  // MediaViewer.tsx/ReelCommentsSheet.tsx.
+  useEffect(() => {
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, []);
+
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
+
+  // Moves to a specific creator, fetching that creator's fresh active
+  // sequence. If it turns out to be empty (expired since StoriesRow's
+  // own data was fetched, or between one Story and the next here), that
+  // creator is skipped in the same direction rather than shown empty --
+  // this recursion is loop-safe by construction, since each step moves
+  // the index strictly toward one end of a finite array, and running off
+  // either end closes the viewer.
+  async function openCreator(index: number, edge: PendingEdge) {
+    if (index < 0 || index >= creators.length) {
+      onClose();
+      return;
+    }
+
+    setCreatorIndex(index);
+    setStories(null);
+    setStoryIndex(0);
+    setCaptionExpanded(false);
+    pendingEdgeRef.current = edge;
+
+    const supabase = createClient();
+    const fetched = await fetchCreatorActiveStories(supabase, creators[index].profileId);
+
+    if (fetched.length === 0) {
+      const nextIndex = edge === "start" ? index + 1 : index - 1;
+      await openCreator(nextIndex, edge);
+      return;
+    }
+
+    setStories(fetched);
+    setStoryIndex(pendingEdgeRef.current === "start" ? 0 : fetched.length - 1);
+  }
+
+  useEffect(() => {
+    openCreator(initialCreatorIndex, "start");
+    // Only runs once on mount -- subsequent navigation goes through
+    // goToNext/goToPrevious calling openCreator directly.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function goToNext() {
+    if (!stories) return;
+    if (storyIndex < stories.length - 1) {
+      setStoryIndex((index) => index + 1);
+      setCaptionExpanded(false);
+    } else {
+      openCreator(creatorIndex + 1, "start");
+    }
+  }
+
+  function goToPrevious() {
+    if (!stories) return;
+    if (storyIndex > 0) {
+      setStoryIndex((index) => index - 1);
+      setCaptionExpanded(false);
+    } else {
+      openCreator(creatorIndex - 1, "end");
+    }
+  }
+
+  // Auto-advance for image Stories -- a plain timeout, reset whenever
+  // the active Story changes (including manual navigation, since that
+  // changes currentStory.id too). Video Stories advance from onEnded
+  // below instead; no timer runs for them.
+  useEffect(() => {
+    if (!currentStory || currentStory.mediaType !== "image") return;
+    const timeoutId = setTimeout(goToNext, IMAGE_STORY_DURATION_MS);
+    return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStory?.id]);
+
+  // Resets videoProgress/fillStarted the moment currentStory changes --
+  // done synchronously during render (the React-documented "adjusting
+  // state when a prop changes" pattern) rather than in an effect, since
+  // an effect body may not call setState synchronously. Only the actual
+  // rAF-deferred flip below needs an effect at all.
+  const [fillStarted, setFillStarted] = useState(false);
+  const [lastSeenStoryId, setLastSeenStoryId] = useState(currentStory?.id);
+  if (currentStory?.id !== lastSeenStoryId) {
+    setLastSeenStoryId(currentStory?.id);
+    setVideoProgress(0);
+    setFillStarted(false);
+  }
+
+  // Drives the image-Story progress fill via a plain CSS width
+  // transition rather than a JS animation loop or a global @keyframes
+  // block (kept out of this codebase entirely) -- one animation frame
+  // after the reset above, flip to the full duration + w-full so the
+  // browser actually animates the change instead of jumping straight to
+  // 100%.
+  useEffect(() => {
+    if (!currentStory || currentStory.mediaType !== "image") return;
+    const rafId = requestAnimationFrame(() => setFillStarted(true));
+    return () => cancelAnimationFrame(rafId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStory?.id, currentStory?.mediaType]);
+
+  function handleDialogKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "Escape") {
+      onClose();
+    } else if (event.key === "ArrowRight") {
+      goToNext();
+    } else if (event.key === "ArrowLeft") {
+      goToPrevious();
+    }
+  }
+
+  const isLongCaption = (currentStory?.caption?.length ?? 0) > 140;
+
+  return (
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Story viewer"
+      tabIndex={-1}
+      onKeyDown={handleDialogKeyDown}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black outline-none"
+    >
+      <div className="relative h-full w-full overflow-hidden bg-shamba-ink sm:my-4 sm:h-[calc(100%-2rem)] sm:max-w-sm sm:rounded-shamba">
+        {!stories || !currentStory ? (
+          <div className="flex size-full items-center justify-center">
+            <Loader2 className="size-8 animate-spin text-shamba-card" aria-hidden="true" />
+          </div>
+        ) : (
+          <>
+            {currentStory.mediaType === "video" ? (
+              <video
+                ref={videoRef}
+                key={currentStory.id}
+                src={currentStory.mediaUrl ?? undefined}
+                autoPlay
+                muted={muted}
+                playsInline
+                onEnded={goToNext}
+                onTimeUpdate={(event) => {
+                  const el = event.currentTarget;
+                  if (el.duration > 0) setVideoProgress(el.currentTime / el.duration);
+                }}
+                className="size-full object-contain"
+              />
+            ) : currentStory.mediaUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={currentStory.id}
+                src={currentStory.mediaUrl}
+                alt=""
+                className="size-full object-cover"
+              />
+            ) : (
+              <div className="flex size-full items-center justify-center text-shamba-card/70">
+                <p className="font-sans text-sm">This Story&apos;s media couldn&apos;t be loaded.</p>
+              </div>
+            )}
+
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-1/3 bg-gradient-to-b from-black/70 to-transparent" />
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/75 to-transparent" />
+
+            {/* Progress segments -- one per Story in the current creator's
+                sequence, reset automatically whenever creatorIndex changes
+                since `stories` itself is replaced. */}
+            <div className="absolute inset-x-3 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-20 flex gap-1">
+              {stories.map((story, index) => (
+                <div
+                  key={story.id}
+                  className="h-0.5 flex-1 overflow-hidden rounded-full bg-shamba-card/35"
+                >
+                  <div
+                    className={
+                      index < storyIndex
+                        ? "h-full w-full bg-shamba-card"
+                        : index > storyIndex
+                          ? "h-full w-0 bg-shamba-card"
+                          : currentStory.mediaType === "video"
+                            ? "h-full bg-shamba-card"
+                            : `h-full bg-shamba-card transition-[width] ease-linear ${
+                                fillStarted ? "w-full duration-[5000ms]" : "w-0 duration-0"
+                              }`
+                    }
+                    style={
+                      index === storyIndex && currentStory.mediaType === "video"
+                        ? { width: `${Math.min(videoProgress * 100, 100)}%` }
+                        : undefined
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Creator identity */}
+            <div className="absolute inset-x-3 top-[calc(env(safe-area-inset-top,0px)+1.5rem)] z-20 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-black/30 backdrop-blur-sm">
+                  <UserRound className="size-4 text-shamba-card" aria-hidden="true" />
+                </span>
+                <Link
+                  href={`/profile/${currentStory.profileId}`}
+                  className="font-sans text-sm font-semibold text-shamba-card drop-shadow transition-colors hover:text-shamba-green"
+                >
+                  {currentStory.displayName ?? "Member"}
+                </Link>
+              </div>
+
+              <div className="flex items-center gap-1">
+                {currentStory.mediaType === "video" && (
+                  <button
+                    type="button"
+                    onClick={() => setMuted((value) => !value)}
+                    aria-label={muted ? "Unmute" : "Mute"}
+                    className="inline-flex size-8 items-center justify-center rounded-full bg-black/30 text-shamba-card backdrop-blur-sm"
+                  >
+                    {muted ? (
+                      <VolumeX className="size-4" aria-hidden="true" />
+                    ) : (
+                      <Volume2 className="size-4" aria-hidden="true" />
+                    )}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Close Story"
+                  className="inline-flex size-8 items-center justify-center rounded-full bg-black/30 text-shamba-card backdrop-blur-sm"
+                >
+                  <X className="size-4" aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+
+            {/* Tap zones -- left half = previous, right half = next.
+                Real buttons, not clickable divs. */}
+            <button
+              type="button"
+              onClick={goToPrevious}
+              aria-label="Previous Story"
+              className="absolute inset-y-0 left-0 z-10 w-1/2"
+            />
+            <button
+              type="button"
+              onClick={goToNext}
+              aria-label="Next Story"
+              className="absolute inset-y-0 right-0 z-10 w-1/2"
+            />
+
+            {/* Desktop-only chevrons, mirroring MediaViewer.tsx's own
+                hidden-below-sm affordance. */}
+            <div className="pointer-events-none absolute inset-0 z-10 hidden items-center justify-between px-2 sm:flex">
+              <span className="pointer-events-auto inline-flex size-9 items-center justify-center rounded-full bg-black/20 text-shamba-card opacity-0 transition-opacity hover:opacity-100">
+                <ChevronLeft className="size-5" aria-hidden="true" />
+              </span>
+              <span className="pointer-events-auto inline-flex size-9 items-center justify-center rounded-full bg-black/20 text-shamba-card opacity-0 transition-opacity hover:opacity-100">
+                <ChevronRight className="size-5" aria-hidden="true" />
+              </span>
+            </div>
+
+            {/* Caption / topic / hashtags / mentions -- own self-contained
+                block, not shared with ReelInfo.tsx, to keep this viewer
+                fully isolated from the Reel component tree. */}
+            <div className="absolute inset-x-3 bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] z-20 text-shamba-card">
+              {currentStory.topic && (
+                <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-black/30 px-2 py-0.5 font-mono text-xs font-semibold backdrop-blur-sm">
+                  <Tag className="size-3" aria-hidden="true" />
+                  {currentStory.topic}
+                </span>
+              )}
+              {!currentStory.topic && (
+                <span className="mb-1.5 inline-flex items-center gap-1 rounded-full bg-black/30 px-2 py-0.5 font-mono text-xs font-semibold backdrop-blur-sm">
+                  <Rss className="size-3" aria-hidden="true" />
+                  Farming Story
+                </span>
+              )}
+
+              {currentStory.caption && (
+                <div className="mt-1.5 text-sm leading-5 drop-shadow">
+                  <p
+                    className={
+                      captionExpanded
+                        ? "max-h-[30vh] overflow-y-auto overscroll-contain whitespace-pre-wrap pr-1"
+                        : "line-clamp-2 whitespace-pre-wrap"
+                    }
+                  >
+                    {currentStory.caption}
+                  </p>
+                  {isLongCaption && (
+                    <button
+                      type="button"
+                      onClick={() => setCaptionExpanded((value) => !value)}
+                      className="mt-0.5 font-mono text-xs font-semibold text-shamba-card/80 hover:text-shamba-card"
+                    >
+                      {captionExpanded ? "Show less" : "Show more"}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {currentStory.hashtags.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1">
+                  {currentStory.hashtags.map((tag) => (
+                    <span key={tag} className="font-mono text-xs text-shamba-card/80 drop-shadow">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {currentStory.mentions.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-x-2 gap-y-1">
+                  {currentStory.mentions.map((mention) =>
+                    mention.displayName ? (
+                      <Link
+                        key={mention.profileId}
+                        href={`/profile/${mention.profileId}`}
+                        className="font-mono text-xs text-shamba-card/80 drop-shadow transition-colors hover:text-shamba-green"
+                      >
+                        @{mention.displayName}
+                      </Link>
+                    ) : (
+                      <span
+                        key={mention.profileId}
+                        className="font-mono text-xs text-shamba-card/60 drop-shadow"
+                      >
+                        @a Shamba Circle member
+                      </span>
+                    ),
+                  )}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
