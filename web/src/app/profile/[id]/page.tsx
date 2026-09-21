@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Lock, UserRound } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
+import { ProfileFollowControl } from "./ProfileFollowControl";
 
 const ROLE_LABELS: Record<string, string> = {
   farmer: "Farmer",
@@ -50,6 +51,42 @@ export default async function PublicProfile({
   const isOwnProfile = id === user.id;
   const isVisible = Boolean(profile && profile.display_name !== null);
 
+  // Follower/following counts and the follow control only ever load for
+  // a profile this viewer can already see (their own, or a public one)
+  // -- the exact same boundary get_public_profile() already draws for
+  // display_name/roles. Counts are public aggregates (follower_count/
+  // following_count are security-definer, granted to any authenticated
+  // caller, same as community_member_count), but showing them for a
+  // profile whose very identity is hidden would be a smaller but real
+  // inconsistency with that existing privacy rule, so it's avoided here
+  // too rather than inventing a separate rule for this one page.
+  let followerCount: number | null = null;
+  let followingCount: number | null = null;
+  let isFollowing = false;
+
+  if (isVisible) {
+    const [followerCountRes, followingCountRes] = await Promise.all([
+      supabase.rpc("follower_count", { p_profile_id: id }),
+      supabase.rpc("following_count", { p_profile_id: id }),
+    ]);
+    followerCount = followerCountRes.data != null ? Number(followerCountRes.data) : null;
+    followingCount = followingCountRes.data != null ? Number(followingCountRes.data) : null;
+
+    if (!isOwnProfile) {
+      // Own-row read: RLS on follows already permits a viewer to see
+      // rows where they are the follower, so this only ever confirms
+      // *this viewer's own* relationship to the profile being viewed --
+      // never anyone else's follow graph.
+      const { data: existingFollow } = await supabase
+        .from("follows")
+        .select("follower_profile_id")
+        .eq("follower_profile_id", user.id)
+        .eq("followed_profile_id", id)
+        .maybeSingle();
+      isFollowing = Boolean(existingFollow);
+    }
+  }
+
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
       <AppHeader />
@@ -91,6 +128,23 @@ export default async function PublicProfile({
                       {ROLE_LABELS[role] ?? role}
                     </span>
                   ))}
+                </div>
+              )}
+
+              {(followerCount !== null || followingCount !== null) && (
+                <div className="mt-3 flex items-center gap-4 text-sm text-shamba-ink-soft">
+                  <span>
+                    <span className="font-semibold text-shamba-ink">{followerCount ?? 0}</span> Followers
+                  </span>
+                  <span>
+                    <span className="font-semibold text-shamba-ink">{followingCount ?? 0}</span> Following
+                  </span>
+                </div>
+              )}
+
+              {!isOwnProfile && (
+                <div className="mt-4">
+                  <ProfileFollowControl profileId={id} initialFollowing={isFollowing} />
                 </div>
               )}
 
