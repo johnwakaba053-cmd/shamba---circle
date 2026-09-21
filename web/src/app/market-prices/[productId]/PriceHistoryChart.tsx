@@ -105,19 +105,33 @@ export function PriceHistoryChart({
 
   const yTicks = [yMin, yMin + (yMax - yMin) / 2, yMax];
 
-  function pathForSeries(values: (number | null)[]): string {
+  // Returns one complete "M..." path string per run of 2+ CONSECUTIVE
+  // real points -- never joined into a single `d` string. Joining
+  // segments with " M" and always prefixing one more "M" up front (the
+  // previous approach) produced a bare, invalid `d="M"` whenever a
+  // series had no run of 2+ adjacent points at all (e.g. real
+  // observations that exist but are never next to each other) -- no
+  // line rendered in that case, which is correct, but the malformed
+  // markup was never intentional. Returning a plain array and letting
+  // the caller render zero, one, or several <path> elements is
+  // unambiguous: exactly the runs that exist get a line, nothing else
+  // is ever implied, and an isolated real observation (no adjacent
+  // point in either direction) still shows -- via its own circle,
+  // rendered independently of this function -- without ever being
+  // joined to a non-adjacent point by an invented line.
+  function pathSegmentsForSeries(values: (number | null)[]): string[] {
     const segments: string[] = [];
     let currentSegment: string[] = [];
     values.forEach((value, index) => {
       if (value === null) {
-        if (currentSegment.length > 1) segments.push(currentSegment.join(" "));
+        if (currentSegment.length > 1) segments.push(`M${currentSegment.join(" ")}`);
         currentSegment = [];
         return;
       }
       currentSegment.push(`${xForIndex(index)},${yForValue(value)}`);
     });
-    if (currentSegment.length > 1) segments.push(currentSegment.join(" "));
-    return segments.join(" M");
+    if (currentSegment.length > 1) segments.push(`M${currentSegment.join(" ")}`);
+    return segments;
   }
 
   // Show fewer x-axis date labels on a narrower measured width so they
@@ -174,9 +188,19 @@ export function PriceHistoryChart({
           ) : null,
         )}
 
-        {series.map((s) => (
-          <path key={s.key} d={`M${pathForSeries(s.values)}`} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        ))}
+        {series.map((s) =>
+          pathSegmentsForSeries(s.values).map((d, segmentIndex) => (
+            <path
+              key={`${s.key}-${segmentIndex}`}
+              d={d}
+              fill="none"
+              stroke={s.color}
+              strokeWidth={2}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          )),
+        )}
 
         {series.map((s) =>
           s.values.map((value, index) =>
@@ -215,6 +239,20 @@ export function PriceHistoryChart({
           />
         )}
       </svg>
+
+      {/* Exactly one real observation exists: the dot above already
+          shows it (rendered independently of any line), but a lone
+          point with no connecting line otherwise reads as "the chart is
+          broken" rather than "this is genuinely all the history there
+          is so far." Never shown for 0 observations (the component
+          returns null before this point) or 2+ (a normal chart needs no
+          such caveat). */}
+      {observations.length === 1 && (
+        <p className="mt-2 text-xs leading-5 text-shamba-ink-soft">
+          Not enough historical data yet. More price history will appear automatically as new KAMIS
+          observations are recorded.
+        </p>
+      )}
 
       {hoverIndex !== null && (
         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 rounded-shamba border border-shamba-line bg-shamba-card px-3 py-2 text-xs text-shamba-ink">
