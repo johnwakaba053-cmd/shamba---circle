@@ -1,11 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, MapPin } from "lucide-react";
+import { ArrowLeft, MapPin, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { fetchListingMediaByListingId } from "@/lib/listingMedia";
 import { AppHeader } from "@/components/AppHeader";
 import { ProfileLink } from "@/components/ProfileLink";
 import { ListingGallery } from "./ListingGallery";
+import { DeleteListingControl } from "./DeleteListingControl";
 
 type Listing = {
   id: string;
@@ -63,6 +64,7 @@ export default async function ListingDetail({
     typedListing.id,
   ]);
   const media = listingMediaByListingId.get(typedListing.id) ?? [];
+  const isOwner = typedListing.profile_id === user.id;
 
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
@@ -134,6 +136,25 @@ export default async function ListingDetail({
             {/* A "Contact seller" action belongs here once a messaging
                 subsystem exists -- not part of this stage. */}
           </div>
+
+          {/* Only the owner ever sees this block at all -- gated here,
+              server-side, on the authenticated user's id, not on
+              seller_display_name or anything client-supplied. A buyer
+              viewing someone else's listing gets nothing in this
+              position, not a disabled/hidden control still present in
+              the page. */}
+          {isOwner && (
+            <div className="mt-3 flex items-center gap-4">
+              <Link
+                href={`/marketplace/${typedListing.id}/edit`}
+                className="inline-flex items-center gap-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+              >
+                <Pencil className="size-3.5" aria-hidden="true" />
+                Edit listing
+              </Link>
+              <DeleteListingControl listingId={typedListing.id} />
+            </div>
+          )}
         </div>
       </main>
     </div>

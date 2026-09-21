@@ -68,3 +68,52 @@ export async function fetchListingMediaByListingId(
 
   return result;
 }
+
+// Edit-only shape: includes storagePath, unlike ListingMediaItem above.
+// This is a deliberate, narrow exception to "never expose storage_path
+// to the UI" -- the edit form needs the actual object path to call
+// storage.remove() when the seller removes an existing photo (Storage
+// has no "delete by row id" API, only delete-by-path), not to display
+// or link to it anywhere. Kept as its own type/function rather than
+// widening ListingMediaItem, so the browse/detail read paths continue
+// to receive only {id, url} exactly as before.
+export type EditableListingMediaItem = {
+  id: string;
+  storagePath: string;
+  url: string;
+};
+
+// Single-listing, not batched -- only ever called from the edit page for
+// the one listing being edited, unlike fetchListingMediaByListingId's
+// whole-page batching.
+export async function fetchEditableListingMedia(
+  supabase: SupabaseClient,
+  listingId: string,
+): Promise<EditableListingMediaItem[]> {
+  const { data: mediaRows } = await supabase
+    .from("listing_media")
+    .select("id, storage_path")
+    .eq("listing_id", listingId)
+    .order("created_at", { ascending: true });
+
+  if (!mediaRows || mediaRows.length === 0) {
+    return [];
+  }
+
+  const signedUrlResults = await Promise.all(
+    mediaRows.map((row) =>
+      supabase.storage
+        .from("listing-media")
+        .createSignedUrl(row.storage_path, SIGNED_URL_EXPIRY_SECONDS),
+    ),
+  );
+
+  const items: EditableListingMediaItem[] = [];
+  mediaRows.forEach((row, index) => {
+    const url = signedUrlResults[index]?.data?.signedUrl;
+    if (!url) return;
+    items.push({ id: row.id, storagePath: row.storage_path, url });
+  });
+
+  return items;
+}

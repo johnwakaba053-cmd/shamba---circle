@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import type { EditableListingMediaItem } from "@/lib/listingMedia";
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 2000;
@@ -24,23 +25,58 @@ type Status =
   | { kind: "loading" }
   | { kind: "error"; message: string };
 
-export function ListingForm({ categories }: { categories: string[] }) {
+// Shared by both /marketplace/new (create) and /marketplace/[id]/edit
+// (edit) rather than duplicated -- the field set, validation, and photo
+// picker are identical in both places; only what happens on submit (and
+// a few labels) differs by `mode`. `listingId`/`initialValues`/
+// `initialPhotos` are only ever passed by the edit page.
+export function ListingForm({
+  categories,
+  mode = "create",
+  listingId,
+  initialValues,
+  initialPhotos = [],
+}: {
+  categories: string[];
+  mode?: "create" | "edit";
+  listingId?: string;
+  initialValues?: {
+    title: string;
+    description: string;
+    category: string;
+    listingType: ListingType;
+    price: string;
+    priceUnit: string;
+    location: string;
+  };
+  initialPhotos?: EditableListingMediaItem[];
+}) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [category, setCategory] = useState(categories[0] ?? "");
-  const [listingType, setListingType] = useState<ListingType>("for_sale");
-  const [price, setPrice] = useState("");
-  const [priceUnit, setPriceUnit] = useState("");
-  const [location, setLocation] = useState("");
+  const [title, setTitle] = useState(initialValues?.title ?? "");
+  const [description, setDescription] = useState(initialValues?.description ?? "");
+  const [category, setCategory] = useState(initialValues?.category ?? categories[0] ?? "");
+  const [listingType, setListingType] = useState<ListingType>(
+    initialValues?.listingType ?? "for_sale",
+  );
+  const [price, setPrice] = useState(initialValues?.price ?? "");
+  const [priceUnit, setPriceUnit] = useState(initialValues?.priceUnit ?? "");
+  const [location, setLocation] = useState(initialValues?.location ?? "");
+  // Existing photos already saved on the listing (edit mode only) --
+  // removing one here only updates this local state; the actual delete
+  // (row + storage object) happens on save, same as a new file only
+  // actually uploads on save. Diffed against `initialPhotos` at submit
+  // time to know what the seller removed.
+  const [existingPhotos, setExistingPhotos] =
+    useState<EditableListingMediaItem[]>(initialPhotos);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   const isLoading = status.kind === "loading";
   const descriptionRemaining = MAX_DESCRIPTION_LENGTH - description.length;
+  const totalPhotoCount = existingPhotos.length + selectedFiles.length;
 
   // Same object-URL preview pattern as FeedComposer.tsx/StoryComposer.tsx
   // -- revoked on unmount/change so nothing leaks.
@@ -62,7 +98,7 @@ export function ListingForm({ categories }: { categories: string[] }) {
 
     const combined = [...selectedFiles, ...files];
 
-    if (combined.length > MAX_PHOTOS) {
+    if (existingPhotos.length + combined.length > MAX_PHOTOS) {
       setPhotoError(`You can attach up to ${MAX_PHOTOS} photos per listing.`);
       return;
     }
@@ -84,6 +120,11 @@ export function ListingForm({ categories }: { categories: string[] }) {
 
   function removeFile(index: number) {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setPhotoError(null);
+  }
+
+  function removeExistingPhoto(id: string) {
+    setExistingPhotos((prev) => prev.filter((photo) => photo.id !== id));
     setPhotoError(null);
   }
 
@@ -131,6 +172,140 @@ export function ListingForm({ categories }: { categories: string[] }) {
         return;
       }
 
+      const fields = {
+        title: trimmedTitle,
+        description: trimmedDescription,
+        category,
+        listing_type: listingType,
+        price: parsedPrice,
+        price_unit: priceUnit.trim() || null,
+        location: location.trim() || null,
+      };
+
+      if (mode === "edit") {
+        if (!listingId) {
+          setStatus({
+            kind: "error",
+            message: "Something went wrong. Please try again.",
+          });
+          return;
+        }
+
+        // Fields are saved first -- mirrors create mode's own "anchor
+        // resource first" ordering (there, the listing row is created
+        // before any photo work happens). A failure here is a clean,
+        // total no-op: nothing about the seller's photos is touched at
+        // all. profile_id is never part of this payload -- ownership
+        // can't change through this form, and the .eq("profile_id", ...)
+        // filter below is a belt-and-braces mirror of the RLS policy
+        // that already enforces this server-side.
+        const { data: updatedListing, error: updateError } = await supabase
+          .from("listings")
+          .update(fields)
+          .eq("id", listingId)
+          .eq("profile_id", user.id)
+          .select("id")
+          .single();
+
+        if (updateError || !updatedListing) {
+          setStatus({
+            kind: "error",
+            message: "We couldn't save your listing. Please try again.",
+          });
+          return;
+        }
+
+        // Existing photos the seller unselected -- diffed against the
+        // form's original snapshot, not tracked as a separate removal
+        // list. Deleting the listing_media row first (the authoritative
+        // record) then best-effort removing the Storage object mirrors
+        // StoryViewer's own delete-then-cleanup precedent exactly: a
+        // failed storage remove only ever leaves an orphaned object
+        // nothing in the app can render or link to again, never a
+        // dangling/broken row.
+        const removedPhotos = initialPhotos.filter(
+          (photo) => !existingPhotos.some((kept) => kept.id === photo.id),
+        );
+
+        for (const photo of removedPhotos) {
+          const { error: removeRowError } = await supabase
+            .from("listing_media")
+            .delete()
+            .eq("id", photo.id)
+            .eq("profile_id", user.id);
+
+          if (removeRowError) {
+            setStatus({
+              kind: "error",
+              message: "We couldn't remove one of your photos. Please try again.",
+            });
+            return;
+          }
+
+          void supabase.storage.from("listing-media").remove([photo.storagePath]);
+        }
+
+        // New photos, if any -- identical upload-then-insert-with-
+        // rollback shape as create mode, scoped only to this batch: a
+        // failure here never touches the field update or photo removals
+        // already committed above in this same save.
+        if (selectedFiles.length > 0) {
+          const uploadedPaths: string[] = [];
+          let uploadFailed = false;
+
+          for (const file of selectedFiles) {
+            const extension = file.name.includes(".")
+              ? file.name.split(".").pop()
+              : file.type.split("/")[1];
+            const path = `${user.id}/${listingId}/${crypto.randomUUID()}.${extension}`;
+
+            const { error: uploadError } = await supabase.storage
+              .from("listing-media")
+              .upload(path, file, { contentType: file.type });
+
+            if (uploadError) {
+              uploadFailed = true;
+              break;
+            }
+            uploadedPaths.push(path);
+          }
+
+          if (uploadFailed) {
+            if (uploadedPaths.length > 0) {
+              await supabase.storage.from("listing-media").remove(uploadedPaths);
+            }
+            setStatus({
+              kind: "error",
+              message: "We couldn't upload your new photos. Please try again.",
+            });
+            return;
+          }
+
+          const mediaRows = uploadedPaths.map((path, index) => ({
+            listing_id: listingId,
+            profile_id: user.id,
+            storage_path: path,
+            media_type: selectedFiles[index].type,
+          }));
+
+          const { error: mediaInsertError } = await supabase
+            .from("listing_media")
+            .insert(mediaRows);
+
+          if (mediaInsertError) {
+            await supabase.storage.from("listing-media").remove(uploadedPaths);
+            setStatus({
+              kind: "error",
+              message: "We couldn't attach your new photos. Please try again.",
+            });
+            return;
+          }
+        }
+
+        router.push(`/marketplace/${listingId}`);
+        return;
+      }
+
       // The listing must exist before any listing_media row can
       // reference it (listing_media.listing_id is a not-null FK), and
       // its id is also the second path segment every uploaded photo
@@ -141,16 +316,7 @@ export function ListingForm({ categories }: { categories: string[] }) {
       // afterward there).
       const { data: newListing, error: listingError } = await supabase
         .from("listings")
-        .insert({
-          profile_id: user.id,
-          title: trimmedTitle,
-          description: trimmedDescription,
-          category,
-          listing_type: listingType,
-          price: parsedPrice,
-          price_unit: priceUnit.trim() || null,
-          location: location.trim() || null,
-        })
+        .insert({ profile_id: user.id, ...fields })
         .select("id")
         .single();
 
@@ -382,7 +548,7 @@ export function ListingForm({ categories }: { categories: string[] }) {
             Photos <span className="font-normal text-shamba-ink-soft">(optional)</span>
           </span>
           <span className="font-mono text-xs text-shamba-ink-soft">
-            {selectedFiles.length}/{MAX_PHOTOS}
+            {totalPhotoCount}/{MAX_PHOTOS}
           </span>
         </div>
 
@@ -392,14 +558,14 @@ export function ListingForm({ categories }: { categories: string[] }) {
           accept={ACCEPTED_PHOTO_TYPES.join(",")}
           multiple
           onChange={handleFilesSelected}
-          disabled={isLoading || selectedFiles.length >= MAX_PHOTOS}
+          disabled={isLoading || totalPhotoCount >= MAX_PHOTOS}
           className="hidden"
         />
 
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={isLoading || selectedFiles.length >= MAX_PHOTOS}
+          disabled={isLoading || totalPhotoCount >= MAX_PHOTOS}
           className="inline-flex w-fit items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70"
         >
           <ImagePlus className="size-4" aria-hidden="true" />
@@ -412,8 +578,28 @@ export function ListingForm({ categories }: { categories: string[] }) {
           </p>
         )}
 
-        {selectedFiles.length > 0 && (
+        {(existingPhotos.length > 0 || selectedFiles.length > 0) && (
           <div className="flex flex-wrap gap-2">
+            {existingPhotos.map((photo) => (
+              <div key={photo.id} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element -- private, signed-URL bucket, same as ListingMedia.tsx */}
+                <img
+                  src={photo.url}
+                  alt="Listing photo"
+                  className="size-20 rounded-shamba border border-shamba-line object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeExistingPhoto(photo.id)}
+                  disabled={isLoading}
+                  aria-label="Remove this photo"
+                  className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-shamba-rust text-shamba-card disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <X className="size-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+
             {selectedFiles.map((file, index) => (
               <div key={index} className="relative">
                 {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not a remote/signed image */}
@@ -449,7 +635,13 @@ export function ListingForm({ categories }: { categories: string[] }) {
         className="inline-flex items-center justify-center gap-2 rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep disabled:cursor-not-allowed disabled:opacity-70"
       >
         {isLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-        {isLoading ? "Publishing…" : "Publish listing"}
+        {mode === "edit"
+          ? isLoading
+            ? "Saving…"
+            : "Save changes"
+          : isLoading
+            ? "Publishing…"
+            : "Publish listing"}
       </button>
     </form>
   );
