@@ -8,16 +8,19 @@ import { StoryBubble } from "./StoryBubble";
 import { StoryComposer } from "./StoryComposer";
 import { StoryViewer } from "./StoryViewer";
 
-// Sits above ReelFeed as a fixed-height strip in normal flex flow -- see
-// page.tsx for the layout it's mounted in. This is safe alongside the
-// Reel viewport's stability work from Steps 56-58 specifically because
-// this row's height never changes after the page mounts: there's no
-// show/hide toggle, no animation, and its content is fully resolved
-// server-side before the page ever renders client-side. The original
-// flicker bug was caused by an *animated* header collapse resizing the
-// Reel scroll container mid-gesture -- a sibling with a constant height
-// for its whole mounted lifetime doesn't have that failure mode, even
-// though the flex-col + flex-1 shape looks structurally similar.
+// Rendered as ReelFeed's `header` -- the first child inside its own
+// scroll-snap container (see ReelFeed.tsx), not a separate non-scrolling
+// sibling above it. `snap-start` makes it a real snap point: scrolling
+// down moves it off-screen into Reel 1 like any other scrolled-past
+// content, and scrolling back up returns to it, with no JS-driven show/
+// hide logic at all. This is still safe alongside the Reel viewport's
+// stability work from Steps 56-58: that fix was about an *animated*
+// resize of the scroll container's own box height (clientHeight) mid-
+// gesture, which corrupts scroll position -- this row's own height is
+// static (no show/hide toggle, no animation, content fully resolved
+// server-side before the page ever renders client-side), so it only ever
+// changes the container's scrollHeight, which is exactly what
+// overflow-y-auto/scroll-snap are designed to handle.
 //
 // "use client" became necessary in Step 71B (composer) and stays for
 // Step 71C's viewer state. This component only coordinates *which*
@@ -59,7 +62,7 @@ export function StoriesRow({ stories }: { stories: ActiveStory[] }) {
   }
 
   return (
-    <div className="shrink-0 border-b border-shamba-line bg-shamba-card px-4 py-3">
+    <div className="shrink-0 snap-start border-b border-shamba-line bg-shamba-card px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]">
       <h2 className="font-mono text-xs font-semibold uppercase tracking-wide text-shamba-ink-soft">
         Stories
       </h2>

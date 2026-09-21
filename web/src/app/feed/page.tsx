@@ -3,10 +3,9 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { HelpCircle, PawPrint, Sprout, Wheat } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { AppHeader } from "@/components/AppHeader";
 import { fetchPostMediaByPostId } from "@/lib/postMedia";
 import { FeedComposerLauncher } from "./FeedComposerLauncher";
-import { FeedHeaderBar, FeedHeaderVisibilityProvider } from "./FeedHeaderVisibility";
+import { FeedHeaderVisibilityProvider } from "./FeedHeaderVisibility";
 import { fetchPostHashtagsByPostId } from "./hashtags";
 import { fetchPostMentionsByPostId } from "./mentions";
 import { ReelFeed } from "./ReelFeed";
@@ -244,9 +243,14 @@ export default async function Feed({
   return (
     <FeedHeaderVisibilityProvider>
       <div className="relative h-[100dvh] overflow-hidden bg-shamba-bg">
-        <FeedHeaderBar>
-          <AppHeader />
-        </FeedHeaderBar>
+        {/* Product direction: Feed has no AppHeader/navigation at any
+            breakpoint -- it's a dedicated Farming Reels experience,
+            Stories at the top of the same vertical scroll container as
+            the Reels, not a page with a header above content.
+            FeedHeaderVisibilityProvider still wraps the page below --
+            not for a header (none renders here anymore), but because
+            ReelFeed still calls useFeedHeaderVisibility() for its own
+            onScroll wiring and would throw without a provider present. */}
 
         {hasError && (
           <main className="absolute inset-0 mx-auto flex w-full max-w-5xl flex-col items-center overflow-y-auto px-6 pb-20 pt-28 sm:px-10 sm:pt-32">
@@ -307,11 +311,19 @@ export default async function Feed({
         )}
 
         {!hasError && posts.length > 0 && (
-          <main className="absolute inset-0 flex flex-col overflow-hidden pt-44 sm:pt-28">
-            <StoriesRow stories={activeStories} />
-            <div className="relative flex-1 overflow-hidden">
-              <ReelFeed reels={reels} nextCursor={nextCursor} />
-            </div>
+          // No reserved header clearance at any breakpoint -- there's no
+          // header to clear (see the note above). StoriesRow is not a
+          // separate flex sibling reserving its own permanent space --
+          // it's passed into ReelFeed as the first child of its own
+          // scroll-snap container instead (see ReelFeed.tsx), so Reels
+          // get the full available height rather than "whatever's left
+          // after Stories' static band."
+          <main className="absolute inset-0 overflow-hidden">
+            <ReelFeed
+              reels={reels}
+              nextCursor={nextCursor}
+              header={<StoriesRow stories={activeStories} />}
+            />
           </main>
         )}
 

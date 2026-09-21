@@ -18,7 +18,22 @@ import { ReelSlide } from "./ReelSlide";
 // for the auto-hiding AppHeader (see FeedHeaderVisibility.tsx) --
 // deliberately reusing this existing container rather than adding a
 // second, page-level scroll listener.
-export function ReelFeed({ reels, nextCursor }: { reels: Reel[]; nextCursor: string | null }) {
+export function ReelFeed({
+  reels,
+  nextCursor,
+  header,
+}: {
+  reels: Reel[];
+  nextCursor: string | null;
+  // Rendered as the first child inside this same scroll-snap container,
+  // ahead of every ReelSlide -- lets StoriesRow (or nothing at all)
+  // participate in the exact same native scroll/snap gesture as the
+  // Reels below it, rather than living in a separate, non-scrolling
+  // sibling above this container. Optional and purely additive: every
+  // existing scroll-snap class, the onScroll wiring, and how reels/
+  // nextCursor render are all unchanged below.
+  header?: React.ReactNode;
+}) {
   const { reportScrollTop } = useFeedHeaderVisibility();
 
   return (
@@ -26,6 +41,8 @@ export function ReelFeed({ reels, nextCursor }: { reels: Reel[]; nextCursor: str
       onScroll={(event) => reportScrollTop(event.currentTarget.scrollTop)}
       className="h-full snap-y snap-mandatory overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:bg-shamba-bg"
     >
+      {header}
+
       {reels.map((reel) => (
         <ReelSlide key={reel.id} reel={reel} />
       ))}
