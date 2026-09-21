@@ -1,12 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2 } from "lucide-react";
+import { ImagePlus, Loader2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 2000;
+
+// Mirrors the listing-media bucket's own limits exactly (Stage 1
+// migration: 10MB file_size_limit, image/jpeg|png|webp allowed_mime_types)
+// -- kept in sync deliberately, since a looser client-side check here
+// would just mean every rejection happens server-side instead, with a
+// worse error message.
+const MAX_PHOTOS = 5;
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+const ACCEPTED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 type ListingType = "for_sale" | "wanted";
 
@@ -17,6 +26,8 @@ type Status =
 
 export function ListingForm({ categories }: { categories: string[] }) {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState(categories[0] ?? "");
@@ -24,10 +35,57 @@ export function ListingForm({ categories }: { categories: string[] }) {
   const [price, setPrice] = useState("");
   const [priceUnit, setPriceUnit] = useState("");
   const [location, setLocation] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   const isLoading = status.kind === "loading";
   const descriptionRemaining = MAX_DESCRIPTION_LENGTH - description.length;
+
+  // Same object-URL preview pattern as FeedComposer.tsx/StoryComposer.tsx
+  // -- revoked on unmount/change so nothing leaks.
+  const previewUrls = useMemo(
+    () => selectedFiles.map((file) => URL.createObjectURL(file)),
+    [selectedFiles],
+  );
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [previewUrls]);
+
+  function handleFilesSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+
+    if (files.length === 0) return;
+
+    const combined = [...selectedFiles, ...files];
+
+    if (combined.length > MAX_PHOTOS) {
+      setPhotoError(`You can attach up to ${MAX_PHOTOS} photos per listing.`);
+      return;
+    }
+
+    for (const file of combined) {
+      if (!ACCEPTED_PHOTO_TYPES.includes(file.type)) {
+        setPhotoError(`${file.name} isn't a supported photo type. Use JPEG, PNG, or WebP.`);
+        return;
+      }
+      if (file.size > MAX_PHOTO_BYTES) {
+        setPhotoError(`${file.name} is too large. Photos must be under 10MB.`);
+        return;
+      }
+    }
+
+    setPhotoError(null);
+    setSelectedFiles(combined);
+  }
+
+  function removeFile(index: number) {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setPhotoError(null);
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,23 +131,100 @@ export function ListingForm({ categories }: { categories: string[] }) {
         return;
       }
 
-      const { error } = await supabase.from("listings").insert({
-        profile_id: user.id,
-        title: trimmedTitle,
-        description: trimmedDescription,
-        category,
-        listing_type: listingType,
-        price: parsedPrice,
-        price_unit: priceUnit.trim() || null,
-        location: location.trim() || null,
-      });
+      // The listing must exist before any listing_media row can
+      // reference it (listing_media.listing_id is a not-null FK), and
+      // its id is also the second path segment every uploaded photo
+      // needs -- so the listing is always created first, exactly per
+      // the Stage 1/2/3 sequencing, unlike StoryComposer's "upload
+      // first" flow (stories store their single media path directly on
+      // the stories row itself, so there is no separate row to create
+      // afterward there).
+      const { data: newListing, error: listingError } = await supabase
+        .from("listings")
+        .insert({
+          profile_id: user.id,
+          title: trimmedTitle,
+          description: trimmedDescription,
+          category,
+          listing_type: listingType,
+          price: parsedPrice,
+          price_unit: priceUnit.trim() || null,
+          location: location.trim() || null,
+        })
+        .select("id")
+        .single();
 
-      if (error) {
+      if (listingError || !newListing) {
         setStatus({
           kind: "error",
           message: "We couldn't create your listing. Please try again.",
         });
         return;
+      }
+
+      if (selectedFiles.length > 0) {
+        // user.id (never a client-editable field) is the first path
+        // segment -- the exact segment the Stage 1 storage policy
+        // ("Owners can upload their own listing media") checks against
+        // auth.uid(). A random UUID per file (not the original filename)
+        // rules out any collision between two uploads landing in the
+        // same {profile_id}/{listing_id}/ folder.
+        const uploadedPaths: string[] = [];
+        let uploadFailed = false;
+
+        for (const file of selectedFiles) {
+          const extension = file.name.includes(".")
+            ? file.name.split(".").pop()
+            : file.type.split("/")[1];
+          const path = `${user.id}/${newListing.id}/${crypto.randomUUID()}.${extension}`;
+
+          const { error: uploadError } = await supabase.storage
+            .from("listing-media")
+            .upload(path, file, { contentType: file.type });
+
+          if (uploadError) {
+            uploadFailed = true;
+            break;
+          }
+          uploadedPaths.push(path);
+        }
+
+        if (uploadFailed) {
+          // Best-effort cleanup: remove whatever did make it into
+          // Storage, then delete the listing itself -- its own
+          // ON DELETE CASCADE takes care of any listing_media rows
+          // (there can't be any yet at this point, but the delete is
+          // unconditional cleanup either way). The seller never ends up
+          // with a half-created listing sitting in the Marketplace.
+          if (uploadedPaths.length > 0) {
+            await supabase.storage.from("listing-media").remove(uploadedPaths);
+          }
+          await supabase.from("listings").delete().eq("id", newListing.id).eq("profile_id", user.id);
+          setStatus({
+            kind: "error",
+            message: "We couldn't upload your photos. Please try again.",
+          });
+          return;
+        }
+
+        const mediaRows = uploadedPaths.map((path, index) => ({
+          listing_id: newListing.id,
+          profile_id: user.id,
+          storage_path: path,
+          media_type: selectedFiles[index].type,
+        }));
+
+        const { error: mediaInsertError } = await supabase.from("listing_media").insert(mediaRows);
+
+        if (mediaInsertError) {
+          await supabase.storage.from("listing-media").remove(uploadedPaths);
+          await supabase.from("listings").delete().eq("id", newListing.id).eq("profile_id", user.id);
+          setStatus({
+            kind: "error",
+            message: "We couldn't attach your photos. Please try again.",
+          });
+          return;
+        }
       }
 
       router.push("/marketplace");
@@ -239,6 +374,67 @@ export function ListingForm({ categories }: { categories: string[] }) {
           placeholder="e.g. Nakuru"
           className="rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink placeholder:text-shamba-ink-soft focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
         />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="font-sans text-sm font-semibold text-shamba-ink">
+            Photos <span className="font-normal text-shamba-ink-soft">(optional)</span>
+          </span>
+          <span className="font-mono text-xs text-shamba-ink-soft">
+            {selectedFiles.length}/{MAX_PHOTOS}
+          </span>
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ACCEPTED_PHOTO_TYPES.join(",")}
+          multiple
+          onChange={handleFilesSelected}
+          disabled={isLoading || selectedFiles.length >= MAX_PHOTOS}
+          className="hidden"
+        />
+
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isLoading || selectedFiles.length >= MAX_PHOTOS}
+          className="inline-flex w-fit items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          <ImagePlus className="size-4" aria-hidden="true" />
+          Add photos
+        </button>
+
+        {photoError && (
+          <p role="alert" className="text-xs font-semibold text-shamba-rust">
+            {photoError}
+          </p>
+        )}
+
+        {selectedFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {selectedFiles.map((file, index) => (
+              <div key={index} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element -- local object URL preview, not a remote/signed image */}
+                <img
+                  src={previewUrls[index]}
+                  alt={`Selected photo ${index + 1}`}
+                  className="size-20 rounded-shamba border border-shamba-line object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeFile(index)}
+                  disabled={isLoading}
+                  aria-label={`Remove ${file.name}`}
+                  className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-shamba-rust text-shamba-card disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <X className="size-3.5" aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {status.kind === "error" && (

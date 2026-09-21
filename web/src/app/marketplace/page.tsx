@@ -2,8 +2,10 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { fetchListingMediaByListingId } from "@/lib/listingMedia";
 import { AppHeader } from "@/components/AppHeader";
 import { ProfileLink } from "@/components/ProfileLink";
+import { ListingMedia } from "./ListingMedia";
 
 type Listing = {
   id: string;
@@ -36,6 +38,14 @@ export default async function Marketplace() {
     )
     .order("created_at", { ascending: false })
     .limit(50);
+
+  // Batched, not one query per listing (N+1) -- same fetch-then-map
+  // shape already used for posts' media across the rest of this app.
+  // Resolves to an empty Map (never throws) if listing_media doesn't
+  // exist yet or a listing simply has no photos, so a listing with zero
+  // media renders exactly as it always has.
+  const listingIds = (listings ?? []).map((listing) => listing.id);
+  const listingMediaByListingId = await fetchListingMediaByListingId(supabase, listingIds);
 
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
@@ -95,6 +105,11 @@ export default async function Marketplace() {
                     {listing.listing_type === "for_sale" ? "For Sale" : "Wanted"}
                   </span>
                 </div>
+
+                <ListingMedia
+                  items={listingMediaByListingId.get(listing.id) ?? []}
+                  listingTitle={listing.title}
+                />
 
                 <p className="mt-1 font-mono text-xs text-shamba-ink-soft">
                   {listing.category}
