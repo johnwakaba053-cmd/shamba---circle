@@ -93,7 +93,12 @@ export default async function Marketplace() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <h2 className="font-display text-base font-semibold leading-tight text-shamba-ink">
-                    {listing.title}
+                    <Link
+                      href={`/marketplace/${listing.id}`}
+                      className="transition-colors hover:text-shamba-green hover:underline"
+                    >
+                      {listing.title}
+                    </Link>
                   </h2>
                   <span
                     className={
