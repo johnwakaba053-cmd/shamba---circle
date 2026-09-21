@@ -3,6 +3,10 @@
     {
       "path": "/api/internal/ingest-weather-alerts",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/internal/ingest-kamis-prices",
+      "schedule": "0 3 * * *"
     }
   ]
 }
