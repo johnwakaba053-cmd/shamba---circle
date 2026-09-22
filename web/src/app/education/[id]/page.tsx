@@ -21,6 +21,7 @@ type EducationResourceDetail = {
   resource_type: ResourceType;
   origin: ResourceOrigin | null;
   external_url: string | null;
+  storage_path: string | null;
   title: string;
   summary: string;
   content: string;
@@ -61,7 +62,7 @@ export default async function EducationResource({
   const { data, error } = await supabase
     .from("education_resources")
     .select(
-      "id, category_id, topic_id, learning_category, resource_type, origin, external_url, title, summary, content, source_name, source_url, published_at, education_categories(name), education_topics(name, emoji), education_sources(name, url)",
+      "id, category_id, topic_id, learning_category, resource_type, origin, external_url, storage_path, title, summary, content, source_name, source_url, published_at, education_categories(name), education_topics(name, emoji), education_sources(name, url)",
     )
     .eq("id", id)
     .eq("is_published", true)
@@ -179,15 +180,17 @@ export default async function EducationResource({
               ))}
             </div>
 
-            {/* origin = external_linked means the content stays hosted by
-                the original organization -- Shamba Space never re-hosts
-                or offers a download for it, only a link out. No other
-                origin renders an action here yet: there is no real PDF
-                content in the system, so a "Download"/"Read Online"
-                action for external_redistributable/shamba_original is
-                deliberately deferred to the batch that actually adds
-                documents. */}
-            {resource.origin === "external_linked" && resource.external_url && (
+            {/* Shown whenever there's an external URL and nothing has
+                actually been re-hosted in our own Storage yet (storage_path
+                is null) -- true for every resource today, regardless of
+                origin, since this batch classifies rights but rehosts
+                nothing. This is deliberately NOT a download action: it
+                only ever opens the source's own page/PDF in a new tab.
+                Once a resource is genuinely rehosted (storage_path set),
+                this condition naturally stops applying to it and a future
+                "Read Online"/"Download" action (gated by
+                canShowDownloadAction) can take over instead. */}
+            {resource.external_url && !resource.storage_path && (
               <a
                 href={resource.external_url}
                 target="_blank"

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import {
@@ -7,8 +8,10 @@ import {
   EDUCATION_CATEGORY_FALLBACK_ICON,
   LEARNING_CATEGORIES,
   LEARNING_CATEGORY_LABELS,
+  RESOURCE_TYPES,
   RESOURCE_TYPE_LABELS,
   isLearningCategory,
+  isResourceType,
   buildEducationHref,
   type LearningCategory,
   type ResourceType,
@@ -37,15 +40,16 @@ type EducationResourceListItem = {
   title: string;
   summary: string;
   source_name: string | null;
+  education_sources: { name: string } | null;
   published_at: string;
 };
 
 export default async function Education({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; topic?: string; learning?: string }>;
+  searchParams: Promise<{ category?: string; topic?: string; learning?: string; type?: string }>;
 }) {
-  const { category, topic, learning } = await searchParams;
+  const { category, topic, learning, type } = await searchParams;
 
   const supabase = await createClient();
   const {
@@ -84,17 +88,19 @@ export default async function Education({
     : undefined;
   const activeTopic = (topics ?? []).find((t) => t.id === topic) ? topic : undefined;
   const activeLearning = isLearningCategory(learning) ? learning : undefined;
+  const activeType = isResourceType(type) ? type : undefined;
 
   const currentParams = {
     category: activeCategory,
     topic: activeTopic,
     learning: activeLearning,
+    type: activeType,
   };
 
   let resourcesQuery = supabase
     .from("education_resources")
     .select(
-      "id, category_id, topic_id, learning_category, resource_type, title, summary, source_name, published_at",
+      "id, category_id, topic_id, learning_category, resource_type, title, summary, source_name, education_sources(name), published_at",
     )
     .eq("is_published", true)
     .order("published_at", { ascending: false });
@@ -107,6 +113,9 @@ export default async function Education({
   }
   if (activeLearning) {
     resourcesQuery = resourcesQuery.eq("learning_category", activeLearning);
+  }
+  if (activeType) {
+    resourcesQuery = resourcesQuery.eq("resource_type", activeType);
   }
 
   const { data: resources, error: resourcesError } = await resourcesQuery;
@@ -252,6 +261,47 @@ export default async function Education({
 
         {!hasError && (
           <div className="flex flex-col gap-3">
+            {/* Learning Library: the same resource grid below, framed as a
+                distinct, filterable surface (topic/learning-category
+                filters already existed; resource type is new here) rather
+                than a separate route -- an additive label + filter, not a
+                page redesign. */}
+            <h2 className="font-display text-lg font-semibold text-shamba-ink">
+              Learning Library
+            </h2>
+
+            <nav aria-label="Resource type" className="flex flex-wrap gap-2">
+              <Link
+                href={buildEducationHref(currentParams, { type: undefined })}
+                aria-current={!activeType ? "page" : undefined}
+                className={
+                  !activeType
+                    ? "rounded-shamba bg-shamba-blue px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card"
+                    : "rounded-shamba border border-shamba-line bg-shamba-card px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-blue hover:text-shamba-ink"
+                }
+              >
+                All
+              </Link>
+
+              {RESOURCE_TYPES.map((value) => {
+                const isActive = value === activeType;
+                return (
+                  <Link
+                    key={value}
+                    href={buildEducationHref(currentParams, { type: value })}
+                    aria-current={isActive ? "page" : undefined}
+                    className={
+                      isActive
+                        ? "rounded-shamba bg-shamba-blue px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card"
+                        : "rounded-shamba border border-shamba-line bg-shamba-card px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-blue hover:text-shamba-ink"
+                    }
+                  >
+                    {RESOURCE_TYPE_LABELS[value]}
+                  </Link>
+                );
+              })}
+            </nav>
+
             <nav aria-label="Education categories" className="flex flex-wrap gap-2">
               <Link
                 href={buildEducationHref(currentParams, { category: undefined })}
@@ -328,7 +378,7 @@ export default async function Education({
 
         {!hasError && resources && resources.length > 0 && (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {(resources as EducationResourceListItem[]).map((resource) => {
+            {(resources as unknown as EducationResourceListItem[]).map((resource) => {
               const Icon =
                 EDUCATION_CATEGORY_ICON[resource.category_id] ??
                 EDUCATION_CATEGORY_FALLBACK_ICON;
@@ -337,10 +387,14 @@ export default async function Education({
                 : undefined;
 
               return (
-                <Link
+                // A plain <article>, not a <Link> -- the title link and the
+                // "Read Resource" action below both point to the same detail
+                // route as separate, sibling interactive elements, so the
+                // card never nests one link inside another (invalid HTML)
+                // while still giving the whole card exactly one destination.
+                <article
                   key={resource.id}
-                  href={`/education/${resource.id}`}
-                  className="flex flex-col gap-2 rounded-shamba border border-shamba-line bg-shamba-card p-4 transition-colors hover:border-shamba-green"
+                  className="flex flex-col gap-2 rounded-shamba border border-shamba-line bg-shamba-card p-4"
                 >
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
@@ -365,7 +419,12 @@ export default async function Education({
                       aria-hidden="true"
                     />
                     <h2 className="font-display text-base font-semibold leading-tight text-shamba-ink">
-                      {resource.title}
+                      <Link
+                        href={`/education/${resource.id}`}
+                        className="transition-colors hover:text-shamba-green hover:underline"
+                      >
+                        {resource.title}
+                      </Link>
                     </h2>
                   </div>
 
@@ -373,12 +432,20 @@ export default async function Education({
                     {resource.summary}
                   </p>
 
-                  {resource.source_name && (
+                  {(resource.education_sources?.name || resource.source_name) && (
                     <p className="font-mono text-xs text-shamba-ink-soft">
-                      Source: {resource.source_name}
+                      Source: {resource.education_sources?.name ?? resource.source_name}
                     </p>
                   )}
-                </Link>
+
+                  <Link
+                    href={`/education/${resource.id}`}
+                    className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-shamba border border-shamba-line px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink transition-colors hover:border-shamba-green hover:text-shamba-green"
+                  >
+                    Read Resource
+                    <ArrowRight className="size-3.5" aria-hidden="true" />
+                  </Link>
+                </article>
               );
             })}
           </div>

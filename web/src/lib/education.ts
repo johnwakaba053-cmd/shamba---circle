@@ -122,6 +122,7 @@ export type EducationFilterParams = {
   category?: string;
   topic?: string;
   learning?: string;
+  type?: string;
 };
 
 export function buildEducationHref(
@@ -133,6 +134,7 @@ export function buildEducationHref(
   if (next.category) params.set("category", next.category);
   if (next.topic) params.set("topic", next.topic);
   if (next.learning) params.set("learning", next.learning);
+  if (next.type) params.set("type", next.type);
   const qs = params.toString();
   return qs ? `/education?${qs}` : "/education";
 }
