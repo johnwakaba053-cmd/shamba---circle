@@ -27,6 +27,7 @@ type Listing = {
   description: string;
   category: string;
   listing_type: "for_sale" | "wanted";
+  status: "available" | "sold";
   price: number | null;
   price_unit: string | null;
   location: string | null;
@@ -95,7 +96,7 @@ export default async function Marketplace({
       let query = supabase
         .from("listings")
         .select(
-          "id, profile_id, title, description, category, listing_type, price, price_unit, location, seller_display_name, created_at",
+          "id, profile_id, title, description, category, listing_type, status, price, price_unit, location, seller_display_name, created_at",
         );
 
       if (categoryId) {
@@ -242,15 +243,22 @@ export default async function Marketplace({
                       {listing.title}
                     </Link>
                   </h2>
-                  <span
-                    className={
-                      listing.listing_type === "for_sale"
-                        ? "shrink-0 rounded-shamba bg-shamba-green px-2 py-1 font-mono text-xs font-semibold text-shamba-card"
-                        : "shrink-0 rounded-shamba bg-shamba-blue px-2 py-1 font-mono text-xs font-semibold text-shamba-card"
-                    }
-                  >
-                    {listing.listing_type === "for_sale" ? "For Sale" : "Wanted"}
-                  </span>
+                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+                    <span
+                      className={
+                        listing.listing_type === "for_sale"
+                          ? "rounded-shamba bg-shamba-green px-2 py-1 font-mono text-xs font-semibold text-shamba-card"
+                          : "rounded-shamba bg-shamba-blue px-2 py-1 font-mono text-xs font-semibold text-shamba-card"
+                      }
+                    >
+                      {listing.listing_type === "for_sale" ? "For Sale" : "Wanted"}
+                    </span>
+                    {listing.status === "sold" && (
+                      <span className="rounded-shamba bg-shamba-rust px-2 py-1 font-mono text-xs font-bold uppercase tracking-wide text-shamba-card">
+                        Sold
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <ListingMedia

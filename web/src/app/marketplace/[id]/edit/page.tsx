@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { fetchEditableListingMedia } from "@/lib/listingMedia";
+import { categoryDetailsToFormValues, type CategoryDetails } from "@/lib/marketplaceCategoryFields";
 import { AppHeader } from "@/components/AppHeader";
 import { ListingForm } from "../../new/ListingForm";
 
@@ -13,6 +14,7 @@ type Listing = {
   description: string;
   category: string;
   category_id: string | null;
+  category_details: CategoryDetails | null;
   listing_type: "for_sale" | "wanted";
   price: number | null;
   price_unit: string | null;
@@ -38,7 +40,7 @@ export default async function EditListing({
   const { data: listing } = await supabase
     .from("listings")
     .select(
-      "id, profile_id, title, description, category, category_id, listing_type, price, price_unit, location",
+      "id, profile_id, title, description, category, category_id, category_details, listing_type, price, price_unit, location",
     )
     .eq("id", id)
     .maybeSingle();
@@ -118,6 +120,12 @@ export default async function EditListing({
                 price: typedListing.price !== null ? String(typedListing.price) : "",
                 priceUnit: typedListing.price_unit ?? "",
                 location: typedListing.location ?? "",
+                // Never null -- categoryDetailsToFormValues treats a
+                // NULL category_details (every listing that predates
+                // Batch M3, including the real production listing) as
+                // simply empty, so the form's category-specific inputs
+                // render blank rather than crashing on a missing value.
+                categoryDetails: categoryDetailsToFormValues(typedListing.category_details),
               }}
               initialPhotos={existingPhotos}
             />

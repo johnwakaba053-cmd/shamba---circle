@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { EditableListingMediaItem } from "@/lib/listingMedia";
+import {
+  getFilledCategoryDetailFields,
+  validateCategoryDetails,
+  type CategoryFieldFormValues,
+} from "@/lib/marketplaceCategoryFields";
+import { CategoryFields } from "./CategoryFields";
+import { ListingPreview } from "./ListingPreview";
 
 const MAX_TITLE_LENGTH = 120;
 const MAX_DESCRIPTION_LENGTH = 2000;
@@ -33,11 +40,23 @@ type Status =
   | { kind: "loading" }
   | { kind: "error"; message: string };
 
+type ViewMode = "form" | "preview";
+
 // Shared by both /marketplace/new (create) and /marketplace/[id]/edit
 // (edit) rather than duplicated -- the field set, validation, and photo
 // picker are identical in both places; only what happens on submit (and
 // a few labels) differs by `mode`. `listingId`/`initialValues`/
 // `initialPhotos` are only ever passed by the edit page.
+//
+// Batch M3 adds category-aware fields (category_details) as a fourth
+// concern this form owns: it holds the raw form-string values for
+// whichever category is currently selected, resets them whenever the
+// category changes (never carrying a value across into a different
+// category's differently-shaped fields), and validates/serializes them
+// via the same shared marketplaceCategoryFields.ts helpers the detail
+// page and preview also use. A new "preview" step sits between filling
+// the form and actually publishing/saving -- still one page, one
+// component, just a second render mode (`viewMode`), not a new route.
 export function ListingForm({
   categories,
   mode = "create",
@@ -56,6 +75,7 @@ export function ListingForm({
     price: string;
     priceUnit: string;
     location: string;
+    categoryDetails?: CategoryFieldFormValues;
   };
   initialPhotos?: EditableListingMediaItem[];
 }) {
@@ -67,6 +87,10 @@ export function ListingForm({
   const [categoryId, setCategoryId] = useState(
     initialValues?.categoryId ?? categories[0]?.id ?? "",
   );
+  const [categoryDetailsValues, setCategoryDetailsValues] = useState<CategoryFieldFormValues>(
+    initialValues?.categoryDetails ?? {},
+  );
+  const [categoryFieldErrors, setCategoryFieldErrors] = useState<Record<string, string>>({});
   const [listingType, setListingType] = useState<ListingType>(
     initialValues?.listingType ?? "for_sale",
   );
@@ -83,6 +107,7 @@ export function ListingForm({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
+  const [viewMode, setViewMode] = useState<ViewMode>("form");
 
   const isLoading = status.kind === "loading";
   const descriptionRemaining = MAX_DESCRIPTION_LENGTH - description.length;
@@ -138,37 +163,98 @@ export function ListingForm({
     setPhotoError(null);
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  // Changing category always replaces the category-specific field set --
+  // never carries a value from one category's fields into a differently
+  // -shaped category (e.g. a livestock "age" in years is not a seedling
+  // "age" in weeks). The notice below the select is always visible
+  // rather than a blocking confirmation, since this reset only ever
+  // discards data the seller can see was just cleared, in the same form,
+  // with nothing else lost.
+  function handleCategoryChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    setCategoryId(event.target.value);
+    setCategoryDetailsValues({});
+    setCategoryFieldErrors({});
+  }
 
-    if (isLoading) return;
+  function handleCategoryFieldChange(key: string, value: string) {
+    setCategoryDetailsValues((prev) => ({ ...prev, [key]: value }));
+  }
 
+  // Shared by both the "continue to preview" gate and (defensively)
+  // publish itself -- the single validation pass every field goes
+  // through, including category-specific ones via the same
+  // marketplaceCategoryFields.ts validator the form's rendering and the
+  // detail page's display both already read from.
+  function validateAll():
+    | { ok: true; selectedCategoryName: string; parsedCategoryDetails: Record<string, string | number> }
+    | { ok: false; message: string; categoryErrors: Record<string, string> } {
     const trimmedTitle = title.trim();
     const trimmedDescription = description.trim();
 
     if (trimmedTitle.length === 0) {
-      setStatus({ kind: "error", message: "Enter a title for your listing." });
-      return;
+      return { ok: false, message: "Enter a title for your listing.", categoryErrors: {} };
     }
     if (trimmedDescription.length === 0) {
-      setStatus({ kind: "error", message: "Enter a description for your listing." });
-      return;
-    }
-    const selectedCategory = categories.find((option) => option.id === categoryId);
-    if (!selectedCategory) {
-      setStatus({ kind: "error", message: "Choose a category." });
-      return;
+      return { ok: false, message: "Enter a description for your listing.", categoryErrors: {} };
     }
 
-    let parsedPrice: number | null = null;
+    const selectedCategory = categories.find((option) => option.id === categoryId);
+    if (!selectedCategory) {
+      return { ok: false, message: "Choose a category.", categoryErrors: {} };
+    }
+
     if (price.trim().length > 0) {
       const value = Number(price);
       if (Number.isNaN(value) || value < 0) {
-        setStatus({ kind: "error", message: "Enter a valid price, or leave it blank." });
-        return;
+        return { ok: false, message: "Enter a valid price, or leave it blank.", categoryErrors: {} };
       }
-      parsedPrice = value;
     }
+
+    const { errors: categoryErrors, parsed } = validateCategoryDetails(categoryId, categoryDetailsValues);
+    if (categoryErrors.length > 0) {
+      const errorMap: Record<string, string> = {};
+      for (const error of categoryErrors) errorMap[error.key] = error.message;
+      return { ok: false, message: "Please fix the highlighted fields below.", categoryErrors: errorMap };
+    }
+
+    return { ok: true, selectedCategoryName: selectedCategory.name, parsedCategoryDetails: parsed };
+  }
+
+  function handleContinueToPreview(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isLoading) return;
+
+    const validation = validateAll();
+    if (!validation.ok) {
+      setCategoryFieldErrors(validation.categoryErrors);
+      setStatus({ kind: "error", message: validation.message });
+      return;
+    }
+
+    setCategoryFieldErrors({});
+    setStatus({ kind: "idle" });
+    setViewMode("preview");
+  }
+
+  async function handlePublish() {
+    if (isLoading) return;
+
+    const validation = validateAll();
+    if (!validation.ok) {
+      // Defensive only -- reachable only if something changed between
+      // entering preview and clicking publish, which the UI doesn't
+      // allow, but this avoids ever saving unvalidated data.
+      setCategoryFieldErrors(validation.categoryErrors);
+      setStatus({ kind: "error", message: validation.message });
+      setViewMode("form");
+      return;
+    }
+
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
+    const parsedPrice = price.trim().length > 0 ? Number(price) : null;
+    const categoryDetailsPayload =
+      Object.keys(validation.parsedCategoryDetails).length > 0 ? validation.parsedCategoryDetails : null;
 
     setStatus({ kind: "loading" });
 
@@ -192,8 +278,13 @@ export function ListingForm({
         // so nothing there needs to change in this batch; `category_id`
         // is the new stable-identity relationship going forward. See
         // public.marketplace_categories.
-        category: selectedCategory.name,
-        category_id: selectedCategory.id,
+        category: validation.selectedCategoryName,
+        category_id: categoryId,
+        // category_details: null when the category has no filled
+        // fields (every field left blank isn't possible once the
+        // required identity field validated, but this stays a safe,
+        // explicit fallback) -- never an ambiguous empty object.
+        category_details: categoryDetailsPayload,
         listing_type: listingType,
         price: parsedPrice,
         price_unit: priceUnit.trim() || null,
@@ -420,8 +511,63 @@ export function ListingForm({
     }
   }
 
+  if (viewMode === "preview") {
+    const selectedCategory = categories.find((option) => option.id === categoryId);
+    const { parsed } = validateCategoryDetails(categoryId, categoryDetailsValues);
+    const filledDetails = getFilledCategoryDetailFields(categoryId, parsed);
+    const photoUrls = [...existingPhotos.map((photo) => photo.url), ...previewUrls];
+
+    return (
+      <div className="mt-6 flex flex-col gap-4">
+        <ListingPreview
+          title={title.trim()}
+          categoryName={selectedCategory?.name ?? ""}
+          details={filledDetails}
+          description={description.trim()}
+          listingType={listingType}
+          price={price}
+          priceUnit={priceUnit}
+          location={location}
+          photoUrls={photoUrls}
+        />
+
+        {status.kind === "error" && (
+          <p role="alert" className="text-sm font-semibold text-shamba-rust">
+            {status.message}
+          </p>
+        )}
+
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setViewMode("form")}
+            disabled={isLoading}
+            className="inline-flex items-center justify-center rounded-shamba border border-shamba-line px-6 py-3 font-sans text-base font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            Back to edit
+          </button>
+          <button
+            type="button"
+            onClick={handlePublish}
+            disabled={isLoading}
+            className="inline-flex flex-1 items-center justify-center gap-2 rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {isLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            {mode === "edit"
+              ? isLoading
+                ? "Saving…"
+                : "Save changes"
+              : isLoading
+                ? "Publishing…"
+                : "Publish listing"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
+    <form onSubmit={handleContinueToPreview} className="mt-6 flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <label htmlFor="title" className="font-sans text-sm font-semibold text-shamba-ink">
           Title
@@ -437,6 +583,38 @@ export function ListingForm({
           className="rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink placeholder:text-shamba-ink-soft focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
         />
       </div>
+
+      <div className="flex flex-col gap-2">
+        <label htmlFor="category" className="font-sans text-sm font-semibold text-shamba-ink">
+          Category
+        </label>
+        <select
+          id="category"
+          value={categoryId}
+          onChange={handleCategoryChange}
+          disabled={isLoading}
+          className="rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
+        >
+          {categories.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+        <p className="font-mono text-[11px] leading-4 text-shamba-ink-soft">
+          Changing category will clear the category-specific details you&apos;ve entered.
+        </p>
+      </div>
+
+      {categoryId && (
+        <CategoryFields
+          categoryId={categoryId}
+          values={categoryDetailsValues}
+          onChange={handleCategoryFieldChange}
+          errors={categoryFieldErrors}
+          disabled={isLoading}
+        />
+      )}
 
       <div className="flex flex-col gap-2">
         <label
@@ -460,25 +638,6 @@ export function ListingForm({
         <span className="font-mono text-xs text-shamba-ink-soft">
           {descriptionRemaining} characters left
         </span>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <label htmlFor="category" className="font-sans text-sm font-semibold text-shamba-ink">
-          Category
-        </label>
-        <select
-          id="category"
-          value={categoryId}
-          onChange={(event) => setCategoryId(event.target.value)}
-          disabled={isLoading}
-          className="rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
-        >
-          {categories.map((option) => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))}
-        </select>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -652,14 +811,7 @@ export function ListingForm({
         disabled={isLoading}
         className="inline-flex items-center justify-center gap-2 rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep disabled:cursor-not-allowed disabled:opacity-70"
       >
-        {isLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-        {mode === "edit"
-          ? isLoading
-            ? "Saving…"
-            : "Save changes"
-          : isLoading
-            ? "Publishing…"
-            : "Publish listing"}
+        {mode === "edit" ? "Preview changes" : "Continue to preview"}
       </button>
     </form>
   );
