@@ -5,6 +5,13 @@ import { AppHeader } from "@/components/AppHeader";
 import {
   EDUCATION_CATEGORY_ICON,
   EDUCATION_CATEGORY_FALLBACK_ICON,
+  LEARNING_CATEGORIES,
+  LEARNING_CATEGORY_LABELS,
+  RESOURCE_TYPE_LABELS,
+  isLearningCategory,
+  buildEducationHref,
+  type LearningCategory,
+  type ResourceType,
 } from "@/lib/education";
 
 type EducationCategory = {
@@ -12,9 +19,21 @@ type EducationCategory = {
   name: string;
 };
 
+type EducationTopic = {
+  id: string;
+  name: string;
+  topic_type: "crop" | "livestock";
+  crop_type_id: string | null;
+  livestock_type_id: string | null;
+  emoji: string | null;
+};
+
 type EducationResourceListItem = {
   id: string;
   category_id: string;
+  topic_id: string | null;
+  learning_category: LearningCategory | null;
+  resource_type: ResourceType;
   title: string;
   summary: string;
   source_name: string | null;
@@ -24,9 +43,9 @@ type EducationResourceListItem = {
 export default async function Education({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string }>;
+  searchParams: Promise<{ category?: string; topic?: string; learning?: string }>;
 }) {
-  const { category } = await searchParams;
+  const { category, topic, learning } = await searchParams;
 
   const supabase = await createClient();
   const {
@@ -37,34 +56,89 @@ export default async function Education({
     redirect("/sign-in");
   }
 
-  const { data: categories, error: categoriesError } = await supabase
-    .from("education_categories")
-    .select("id, name")
-    .order("name");
+  const [
+    { data: categories, error: categoriesError },
+    { data: topics, error: topicsError },
+    { data: cropPreferences },
+    { data: livestockPreferences },
+  ] = await Promise.all([
+    supabase.from("education_categories").select("id, name").order("name"),
+    // Topics are keyed off the existing canonical crop_types/livestock_types
+    // (never communities -- their ids don't consistently align, per the
+    // Education audit). Only active topics are shown or filterable, the
+    // same is_active convention marketplace_categories already uses.
+    supabase
+      .from("education_topics")
+      .select("id, name, topic_type, crop_type_id, livestock_type_id, emoji")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true }),
+    supabase.from("farmer_crop_preferences").select("crop_type_id"),
+    supabase.from("farmer_livestock_preferences").select("livestock_type_id"),
+  ]);
 
-  // Only trust a category filter that matches a real category -- an
-  // unrecognised value in the query string is treated the same as no
-  // filter, rather than passed straight into the resources query.
+  // Only trust filter values that match something real -- an unrecognised
+  // category/topic/learning value in the query string is treated the same
+  // as no filter, rather than passed straight into the resources query.
   const activeCategory = (categories ?? []).find((c) => c.id === category)
     ? category
     : undefined;
+  const activeTopic = (topics ?? []).find((t) => t.id === topic) ? topic : undefined;
+  const activeLearning = isLearningCategory(learning) ? learning : undefined;
+
+  const currentParams = {
+    category: activeCategory,
+    topic: activeTopic,
+    learning: activeLearning,
+  };
 
   let resourcesQuery = supabase
     .from("education_resources")
-    .select("id, category_id, title, summary, source_name, published_at")
+    .select(
+      "id, category_id, topic_id, learning_category, resource_type, title, summary, source_name, published_at",
+    )
     .eq("is_published", true)
     .order("published_at", { ascending: false });
 
   if (activeCategory) {
     resourcesQuery = resourcesQuery.eq("category_id", activeCategory);
   }
+  if (activeTopic) {
+    resourcesQuery = resourcesQuery.eq("topic_id", activeTopic);
+  }
+  if (activeLearning) {
+    resourcesQuery = resourcesQuery.eq("learning_category", activeLearning);
+  }
 
   const { data: resources, error: resourcesError } = await resourcesQuery;
 
-  const hasError = Boolean(categoriesError || resourcesError);
+  const hasError = Boolean(categoriesError || resourcesError || topicsError);
   const activeCategoryName = (categories as EducationCategory[] | null)?.find(
     (c) => c.id === activeCategory,
   )?.name;
+
+  const allTopics = (topics as EducationTopic[] | null) ?? [];
+  const topicsById = new Map(allTopics.map((t) => [t.id, t]));
+  const cropTopics = allTopics.filter((t) => t.topic_type === "crop");
+  const livestockTopics = allTopics.filter((t) => t.topic_type === "livestock");
+
+  // "Your Farm" -- the farmer's own selected crops/livestock (set on
+  // /profile), matched against the seeded topics by the same canonical
+  // crop_type_id/livestock_type_id both sides already share. A farmer
+  // with no preferences, or preferences that don't match any seeded
+  // topic yet, simply sees no section here -- never an empty one.
+  const cropPreferenceIds = new Set(
+    (cropPreferences ?? []).map((row) => row.crop_type_id),
+  );
+  const livestockPreferenceIds = new Set(
+    (livestockPreferences ?? []).map((row) => row.livestock_type_id),
+  );
+  const yourFarmTopics = allTopics.filter(
+    (t) =>
+      (t.topic_type === "crop" && t.crop_type_id && cropPreferenceIds.has(t.crop_type_id)) ||
+      (t.topic_type === "livestock" &&
+        t.livestock_type_id &&
+        livestockPreferenceIds.has(t.livestock_type_id)),
+  );
 
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
@@ -88,38 +162,160 @@ export default async function Education({
           </p>
         )}
 
-        {!hasError && (
-          <nav aria-label="Education categories" className="flex flex-wrap gap-2">
-            <Link
-              href="/education"
-              aria-current={!activeCategory ? "page" : undefined}
-              className={
-                !activeCategory
-                  ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card"
-                  : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink"
-              }
-            >
-              All
-            </Link>
-
-            {(categories as EducationCategory[] | null)?.map((cat) => {
-              const isActive = cat.id === activeCategory;
-              return (
+        {!hasError && yourFarmTopics.length > 0 && (
+          <section>
+            <h2 className="font-display text-lg font-semibold text-shamba-ink">
+              Your Farm
+            </h2>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {yourFarmTopics.map((t) => (
                 <Link
-                  key={cat.id}
-                  href={`/education?category=${cat.id}`}
-                  aria-current={isActive ? "page" : undefined}
+                  key={t.id}
+                  href={buildEducationHref(currentParams, { topic: t.id })}
+                  aria-current={t.id === activeTopic ? "page" : undefined}
                   className={
-                    isActive
+                    t.id === activeTopic
                       ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card"
                       : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink"
                   }
                 >
-                  {cat.name}
+                  {t.emoji ? `${t.emoji} ` : ""}
+                  {t.name}
                 </Link>
-              );
-            })}
-          </nav>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {!hasError && (cropTopics.length > 0 || livestockTopics.length > 0) && (
+          <section className="flex flex-col gap-4">
+            {cropTopics.length > 0 && (
+              <div>
+                <h2 className="font-display text-lg font-semibold text-shamba-ink">
+                  🌱 Crops
+                </h2>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {cropTopics.map((t) => (
+                    <Link
+                      key={t.id}
+                      href={buildEducationHref(currentParams, { topic: t.id })}
+                      aria-current={t.id === activeTopic ? "page" : undefined}
+                      className={
+                        t.id === activeTopic
+                          ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card"
+                          : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink"
+                      }
+                    >
+                      {t.emoji ? `${t.emoji} ` : ""}
+                      {t.name}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {livestockTopics.length > 0 && (
+              <div>
+                <h2 className="font-display text-lg font-semibold text-shamba-ink">
+                  🐄 Livestock
+                </h2>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {livestockTopics.map((t) => (
+                    <Link
+                      key={t.id}
+                      href={buildEducationHref(currentParams, { topic: t.id })}
+                      aria-current={t.id === activeTopic ? "page" : undefined}
+                      className={
+                        t.id === activeTopic
+                          ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card"
+                          : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink"
+                      }
+                    >
+                      {t.emoji ? `${t.emoji} ` : ""}
+                      {t.name}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTopic && (
+              <Link
+                href={buildEducationHref(currentParams, { topic: undefined })}
+                className="inline-flex w-fit items-center font-sans text-xs font-semibold text-shamba-ink-soft underline transition-colors hover:text-shamba-ink"
+              >
+                Clear topic filter
+              </Link>
+            )}
+          </section>
+        )}
+
+        {!hasError && (
+          <div className="flex flex-col gap-3">
+            <nav aria-label="Education categories" className="flex flex-wrap gap-2">
+              <Link
+                href={buildEducationHref(currentParams, { category: undefined })}
+                aria-current={!activeCategory ? "page" : undefined}
+                className={
+                  !activeCategory
+                    ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card"
+                    : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink"
+                }
+              >
+                All
+              </Link>
+
+              {(categories as EducationCategory[] | null)?.map((cat) => {
+                const isActive = cat.id === activeCategory;
+                return (
+                  <Link
+                    key={cat.id}
+                    href={buildEducationHref(currentParams, { category: cat.id })}
+                    aria-current={isActive ? "page" : undefined}
+                    className={
+                      isActive
+                        ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card"
+                        : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink"
+                    }
+                  >
+                    {cat.name}
+                  </Link>
+                );
+              })}
+            </nav>
+
+            <nav aria-label="Learning categories" className="flex flex-wrap gap-2">
+              <Link
+                href={buildEducationHref(currentParams, { learning: undefined })}
+                aria-current={!activeLearning ? "page" : undefined}
+                className={
+                  !activeLearning
+                    ? "rounded-shamba bg-shamba-blue px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card"
+                    : "rounded-shamba border border-shamba-line bg-shamba-card px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-blue hover:text-shamba-ink"
+                }
+              >
+                All learning categories
+              </Link>
+
+              {LEARNING_CATEGORIES.map((value) => {
+                const isActive = value === activeLearning;
+                return (
+                  <Link
+                    key={value}
+                    href={buildEducationHref(currentParams, { learning: value })}
+                    aria-current={isActive ? "page" : undefined}
+                    className={
+                      isActive
+                        ? "rounded-shamba bg-shamba-blue px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card"
+                        : "rounded-shamba border border-shamba-line bg-shamba-card px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-blue hover:text-shamba-ink"
+                    }
+                  >
+                    {LEARNING_CATEGORY_LABELS[value]}
+                  </Link>
+                );
+              })}
+            </nav>
+          </div>
         )}
 
         {!hasError && (resources?.length ?? 0) === 0 && (
@@ -136,6 +332,9 @@ export default async function Education({
               const Icon =
                 EDUCATION_CATEGORY_ICON[resource.category_id] ??
                 EDUCATION_CATEGORY_FALLBACK_ICON;
+              const resourceTopic = resource.topic_id
+                ? topicsById.get(resource.topic_id)
+                : undefined;
 
               return (
                 <Link
@@ -143,6 +342,23 @@ export default async function Education({
                   href={`/education/${resource.id}`}
                   className="flex flex-col gap-2 rounded-shamba border border-shamba-line bg-shamba-card p-4 transition-colors hover:border-shamba-green"
                 >
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
+                      {RESOURCE_TYPE_LABELS[resource.resource_type]}
+                    </span>
+                    {resourceTopic && (
+                      <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
+                        {resourceTopic.emoji ? `${resourceTopic.emoji} ` : ""}
+                        {resourceTopic.name}
+                      </span>
+                    )}
+                    {resource.learning_category && (
+                      <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
+                        {LEARNING_CATEGORY_LABELS[resource.learning_category]}
+                      </span>
+                    )}
+                  </div>
+
                   <div className="flex items-center gap-2">
                     <Icon
                       className="size-5 shrink-0 text-shamba-green"

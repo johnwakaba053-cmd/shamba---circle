@@ -1,16 +1,26 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import {
   EDUCATION_CATEGORY_ICON,
   EDUCATION_CATEGORY_FALLBACK_ICON,
+  LEARNING_CATEGORY_LABELS,
+  RESOURCE_TYPE_LABELS,
+  type LearningCategory,
+  type ResourceType,
+  type ResourceOrigin,
 } from "@/lib/education";
 
 type EducationResourceDetail = {
   id: string;
   category_id: string;
+  topic_id: string | null;
+  learning_category: LearningCategory | null;
+  resource_type: ResourceType;
+  origin: ResourceOrigin | null;
+  external_url: string | null;
   title: string;
   summary: string;
   content: string;
@@ -18,6 +28,8 @@ type EducationResourceDetail = {
   source_url: string | null;
   published_at: string;
   education_categories: { name: string } | null;
+  education_topics: { name: string; emoji: string | null } | null;
+  education_sources: { name: string; url: string | null } | null;
 };
 
 type RelatedResource = {
@@ -49,7 +61,7 @@ export default async function EducationResource({
   const { data, error } = await supabase
     .from("education_resources")
     .select(
-      "id, category_id, title, summary, content, source_name, source_url, published_at, education_categories(name)",
+      "id, category_id, topic_id, learning_category, resource_type, origin, external_url, title, summary, content, source_name, source_url, published_at, education_categories(name), education_topics(name, emoji), education_sources(name, url)",
     )
     .eq("id", id)
     .eq("is_published", true)
@@ -63,16 +75,37 @@ export default async function EducationResource({
 
   const paragraphs = resource?.content.split("\n\n") ?? [];
 
-  const { data: related } = resource
-    ? await supabase
+  // Related resources prefer the same topic (when this resource has one)
+  // over the existing category relationship, but only ever fall back to
+  // the original category-based query -- unchanged -- when there's no
+  // topic, or the topic has no other published resources yet.
+  let related: RelatedResource[] | null = null;
+
+  if (resource) {
+    if (resource.topic_id) {
+      const { data: topicRelated } = await supabase
+        .from("education_resources")
+        .select("id, title, summary")
+        .eq("topic_id", resource.topic_id)
+        .eq("is_published", true)
+        .neq("id", resource.id)
+        .order("published_at", { ascending: false })
+        .limit(3);
+      related = topicRelated ?? null;
+    }
+
+    if (!related || related.length === 0) {
+      const { data: categoryRelated } = await supabase
         .from("education_resources")
         .select("id, title, summary")
         .eq("category_id", resource.category_id)
         .eq("is_published", true)
         .neq("id", resource.id)
         .order("published_at", { ascending: false })
-        .limit(3)
-    : { data: null };
+        .limit(3);
+      related = categoryRelated ?? null;
+    }
+  }
 
   const Icon = resource
     ? (EDUCATION_CATEGORY_ICON[resource.category_id] ??
@@ -96,10 +129,27 @@ export default async function EducationResource({
 
         {!error && resource && (
           <article className="w-full max-w-2xl rounded-shamba border border-shamba-line bg-shamba-card p-6 sm:p-8">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
+                {RESOURCE_TYPE_LABELS[resource.resource_type]}
+              </span>
+              {resource.education_topics && (
+                <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
+                  {resource.education_topics.emoji ? `${resource.education_topics.emoji} ` : ""}
+                  {resource.education_topics.name}
+                </span>
+              )}
+              {resource.learning_category && (
+                <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
+                  {LEARNING_CATEGORY_LABELS[resource.learning_category]}
+                </span>
+              )}
+            </div>
+
             {resource.education_categories && (
               <Link
                 href={`/education?category=${resource.category_id}`}
-                className="inline-flex items-center gap-2 font-mono text-xs font-semibold text-shamba-green transition-colors hover:text-shamba-green-deep"
+                className="mt-2 inline-flex items-center gap-2 font-mono text-xs font-semibold text-shamba-green transition-colors hover:text-shamba-green-deep"
               >
                 <Icon className="size-4" aria-hidden="true" />
                 {resource.education_categories.name}
@@ -128,6 +178,28 @@ export default async function EducationResource({
                 </p>
               ))}
             </div>
+
+            {/* origin = external_linked means the content stays hosted by
+                the original organization -- Shamba Space never re-hosts
+                or offers a download for it, only a link out. No other
+                origin renders an action here yet: there is no real PDF
+                content in the system, so a "Download"/"Read Online"
+                action for external_redistributable/shamba_original is
+                deliberately deferred to the batch that actually adds
+                documents. */}
+            {resource.origin === "external_linked" && resource.external_url && (
+              <a
+                href={resource.external_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 inline-flex items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg"
+              >
+                {resource.education_sources?.name
+                  ? `Read on ${resource.education_sources.name}`
+                  : "View Resource"}
+                <ExternalLink className="size-4" aria-hidden="true" />
+              </a>
+            )}
 
             {(resource.source_name || resource.source_url) && (
               <p className="mt-6 border-t border-shamba-line pt-4 text-sm text-shamba-ink-soft">
