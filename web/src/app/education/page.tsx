@@ -15,6 +15,7 @@ import {
   buildEducationHref,
   type LearningCategory,
   type ResourceType,
+  type ResourceOrigin,
 } from "@/lib/education";
 
 type EducationCategory = {
@@ -37,6 +38,7 @@ type EducationResourceListItem = {
   topic_id: string | null;
   learning_category: LearningCategory | null;
   resource_type: ResourceType;
+  origin: ResourceOrigin | null;
   title: string;
   summary: string;
   source_name: string | null;
@@ -100,7 +102,7 @@ export default async function Education({
   let resourcesQuery = supabase
     .from("education_resources")
     .select(
-      "id, category_id, topic_id, learning_category, resource_type, title, summary, source_name, education_sources(name), published_at",
+      "id, category_id, topic_id, learning_category, resource_type, origin, title, summary, source_name, education_sources(name), published_at",
     )
     .eq("is_published", true)
     .order("published_at", { ascending: false });
@@ -396,6 +398,17 @@ export default async function Education({
                   key={resource.id}
                   className="flex flex-col gap-2 rounded-shamba border border-shamba-line bg-shamba-card p-4"
                 >
+                  {/* Shown only for origin = shamba_original -- distinct
+                      green fill (not the neutral bg-shamba-bg used for the
+                      type/topic/learning badges below) so a farmer can tell
+                      at a glance this is Shamba Space's own written guide,
+                      not an external link. */}
+                  {resource.origin === "shamba_original" && (
+                    <span className="w-fit rounded-shamba bg-shamba-green px-2 py-0.5 font-mono text-xs font-semibold text-shamba-card">
+                      Shamba Space Original
+                    </span>
+                  )}
+
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
                       {RESOURCE_TYPE_LABELS[resource.resource_type]}

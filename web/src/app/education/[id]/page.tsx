@@ -130,6 +130,16 @@ export default async function EducationResource({
 
         {!error && resource && (
           <article className="w-full max-w-2xl rounded-shamba border border-shamba-line bg-shamba-card p-6 sm:p-8">
+            {/* Shown only for origin = shamba_original -- same distinct
+                green-filled badge as the Learning Library cards, so it's
+                obvious this is Shamba Space's own written guide rather
+                than a linked external resource. */}
+            {resource.origin === "shamba_original" && (
+              <span className="mb-1.5 inline-block w-fit rounded-shamba bg-shamba-green px-2 py-0.5 font-mono text-xs font-semibold text-shamba-card">
+                Shamba Space Original
+              </span>
+            )}
+
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
                 {RESOURCE_TYPE_LABELS[resource.resource_type]}
@@ -170,14 +180,29 @@ export default async function EducationResource({
             </p>
 
             <div className="mt-6 flex flex-col gap-4 border-t border-shamba-line pt-6">
-              {paragraphs.map((paragraph, index) => (
-                <p
-                  key={index}
-                  className="whitespace-pre-wrap text-base leading-7 text-shamba-ink"
-                >
-                  {paragraph}
-                </p>
-              ))}
+              {/* A "## " prefix marks a section heading -- a plain
+                  rendering convention, not a schema change, that lets a
+                  long-form original guide (like the Avocado guide) read as
+                  short, scannable sections on a phone instead of one wall
+                  of text. Existing content with no "## " lines (all
+                  external resources today) renders exactly as before. */}
+              {paragraphs.map((paragraph, index) =>
+                paragraph.startsWith("## ") ? (
+                  <h2
+                    key={index}
+                    className="font-display text-lg font-semibold text-shamba-ink"
+                  >
+                    {paragraph.slice(3)}
+                  </h2>
+                ) : (
+                  <p
+                    key={index}
+                    className="whitespace-pre-wrap text-base leading-7 text-shamba-ink"
+                  >
+                    {paragraph}
+                  </p>
+                ),
+              )}
             </div>
 
             {/* Shown whenever there's an external URL and nothing has
@@ -226,9 +251,23 @@ export default async function EducationResource({
 
         {!error && resource && related && related.length > 0 && (
           <section className="mt-8 w-full max-w-2xl">
+            {/* Reuses the exact same topic-first related-resources query
+                above -- no separate "Go Deeper" fetch exists. For an
+                original Shamba Space guide, its topic-matched related
+                resources are, by construction, the verified external
+                research on the same topic (e.g. the KALRO avocado
+                course) -- exactly what "Go Deeper" means. An external
+                resource's own page keeps the unchanged "Related
+                resources" heading, since that framing doesn't apply
+                there. */}
             <h2 className="font-display text-lg font-semibold text-shamba-ink">
-              Related resources
+              {resource.origin === "shamba_original" ? "Go Deeper" : "Related resources"}
             </h2>
+            {resource.origin === "shamba_original" && (
+              <p className="mt-1 text-sm text-shamba-ink-soft">
+                Verified research from KALRO, FAO and other authoritative sources on this topic.
+              </p>
+            )}
             <div className="mt-4 flex flex-col gap-3">
               {(related as RelatedResource[]).map((item) => (
                 <Link
