@@ -1,9 +1,10 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, UserRound } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { ProfileLink } from "@/components/ProfileLink";
+import { formatDaySeparator, formatMessageTime, isSameDay } from "@/lib/formatMessageTime";
 import { MembershipControl } from "./MembershipControl";
 import { PostComposer } from "./PostComposer";
 import { PostLikeControl } from "./PostLikeControl";
@@ -21,6 +22,69 @@ type PostCommentRow = {
   body: string;
   created_at: string;
 };
+
+type PostRow = {
+  id: string;
+  profile_id: string;
+  author_display_name: string;
+  body: string;
+  created_at: string;
+};
+
+type MessageGroup = {
+  key: string;
+  dateLabel: string | null;
+  profileId: string;
+  authorDisplayName: string;
+  timestamp: string;
+  posts: PostRow[];
+};
+
+// A burst continues only while it's the same farmer, on the same
+// Nairobi calendar day (see lib/formatMessageTime.ts), AND within this
+// gap of their previous message -- matching the approved audit's own
+// "a few minutes" recommendation. A longer pause from the same farmer
+// starts a fresh header rather than silently attaching to an old one.
+const GROUP_GAP_MS = 5 * 60 * 1000;
+
+// Groups consecutive posts from the same farmer into one visual "burst"
+// (one avatar/name/timestamp header, several message lines underneath)
+// and marks where a date separator belongs. Purely a rendering-layer
+// transform over the already-fetched, already-ordered posts -- every
+// post inside every group is still rendered as its own independent
+// element below (see the JSX), so likes/comments/deletion keep working
+// per post exactly as before this batch.
+function groupMessages(posts: PostRow[]): MessageGroup[] {
+  const groups: MessageGroup[] = [];
+
+  for (const post of posts) {
+    const prevGroup = groups.at(-1);
+    const prevPost = prevGroup?.posts.at(-1);
+
+    const sameDay = prevPost ? isSameDay(prevPost.created_at, post.created_at) : false;
+    const sameAuthor = prevGroup ? prevGroup.profileId === post.profile_id : false;
+    const withinGap = prevPost
+      ? new Date(post.created_at).getTime() - new Date(prevPost.created_at).getTime() <=
+        GROUP_GAP_MS
+      : false;
+
+    if (prevGroup && prevPost && sameAuthor && sameDay && withinGap) {
+      prevGroup.posts.push(post);
+      continue;
+    }
+
+    groups.push({
+      key: post.id,
+      dateLabel: sameDay ? null : formatDaySeparator(post.created_at),
+      profileId: post.profile_id,
+      authorDisplayName: post.author_display_name,
+      timestamp: post.created_at,
+      posts: [post],
+    });
+  }
+
+  return groups;
+}
 
 export default async function CommunityDetail({
   params,
@@ -137,6 +201,8 @@ export default async function CommunityDetail({
 
   const commentsFailed = Boolean(commentsError);
 
+  const messageGroups = groupMessages(orderedPosts);
+
   // Changes whenever the newest post changes (first load, and again
   // right after this viewer sends one) -- see CommunityConversation.tsx,
   // which re-scrolls to the bottom whenever this key changes.
@@ -193,51 +259,79 @@ export default async function CommunityDetail({
         )}
 
         {!postsError && orderedPosts.length > 0 && (
-          <div className="flex flex-col gap-3">
-            {orderedPosts.map((post) => (
-              <article
-                key={post.id}
-                className="rounded-shamba border border-shamba-line bg-shamba-card p-4"
-              >
-                <div className="flex items-baseline justify-between gap-2">
-                  <ProfileLink
-                    profileId={post.profile_id}
-                    displayName={post.author_display_name}
-                    className="font-sans text-sm font-semibold text-shamba-ink"
-                  />
-                  <p className="shrink-0 font-mono text-xs text-shamba-ink-soft">
-                    {new Date(post.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-                <p className="mt-1 whitespace-pre-wrap text-base leading-6 text-shamba-ink-soft">
-                  {post.body}
-                </p>
-                <PostMedia items={postMediaByPostId.get(post.id) ?? []} />
-                <PostDeleteControl postId={post.id} isAuthor={post.profile_id === user.id} />
+          <div className="flex flex-col gap-5">
+            {messageGroups.map((group) => (
+              <div key={group.key}>
+                {group.dateLabel && (
+                  <div className="mb-5 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-shamba-line" aria-hidden="true" />
+                    <span className="shrink-0 font-mono text-xs font-semibold tracking-wide text-shamba-ink-soft">
+                      {group.dateLabel}
+                    </span>
+                    <div className="h-px flex-1 bg-shamba-line" aria-hidden="true" />
+                  </div>
+                )}
 
-                <div className="flex flex-wrap items-start gap-4">
-                  <PostLikeControl
-                    postId={post.id}
-                    isMember={isMember}
-                    initialLiked={likedPostIds.has(post.id)}
-                    initialLikeCount={likeCountByPostId.get(post.id) ?? 0}
-                  />
-                  <PostCommentsSection
-                    postId={post.id}
-                    isMember={isMember}
-                    commentsFailed={commentsFailed}
-                    comments={(commentsByPostId.get(post.id) ?? []).map((comment) => ({
-                      id: comment.id,
-                      profileId: comment.profile_id,
-                      authorDisplayName: comment.author_display_name,
-                      body: comment.body,
-                      isAuthor: comment.profile_id === user.id,
-                      myReactionTypes: myReactionTypesByCommentId.get(comment.id) ?? [],
-                      reactionCounts: reactionCountsByCommentId.get(comment.id) ?? [],
-                    }))}
-                  />
+                <div className="flex items-start gap-2.5">
+                  <span
+                    className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border border-shamba-line bg-shamba-card text-shamba-ink-soft"
+                    aria-hidden="true"
+                  >
+                    <UserRound className="size-4" />
+                  </span>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline gap-2">
+                      <ProfileLink
+                        profileId={group.profileId}
+                        displayName={group.authorDisplayName}
+                        className="min-w-0 truncate font-sans text-sm font-semibold text-shamba-ink"
+                      />
+                      <span className="shrink-0 font-mono text-xs text-shamba-ink-soft">
+                        {formatMessageTime(group.timestamp)}
+                      </span>
+                    </div>
+
+                    <div className="mt-1 flex flex-col gap-1.5">
+                      {group.posts.map((post) => (
+                        <div key={post.id}>
+                          <p className="whitespace-pre-wrap text-base leading-6 text-shamba-ink">
+                            {post.body}
+                          </p>
+                          <PostMedia items={postMediaByPostId.get(post.id) ?? []} />
+                          <PostDeleteControl
+                            postId={post.id}
+                            isAuthor={post.profile_id === user.id}
+                          />
+
+                          <div className="flex flex-wrap items-start gap-4">
+                            <PostLikeControl
+                              postId={post.id}
+                              isMember={isMember}
+                              initialLiked={likedPostIds.has(post.id)}
+                              initialLikeCount={likeCountByPostId.get(post.id) ?? 0}
+                            />
+                            <PostCommentsSection
+                              postId={post.id}
+                              isMember={isMember}
+                              commentsFailed={commentsFailed}
+                              comments={(commentsByPostId.get(post.id) ?? []).map((comment) => ({
+                                id: comment.id,
+                                profileId: comment.profile_id,
+                                authorDisplayName: comment.author_display_name,
+                                body: comment.body,
+                                isAuthor: comment.profile_id === user.id,
+                                myReactionTypes: myReactionTypesByCommentId.get(comment.id) ?? [],
+                                reactionCounts: reactionCountsByCommentId.get(comment.id) ?? [],
+                              }))}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
-              </article>
+              </div>
             ))}
           </div>
         )}
