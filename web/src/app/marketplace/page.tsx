@@ -3,9 +3,22 @@ import Link from "next/link";
 import { MapPin } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { fetchListingMediaByListingId } from "@/lib/listingMedia";
+import {
+  buildCursorFilter,
+  buildMarketplaceHref,
+  buildSearchFilter,
+  cursorValueForRow,
+  decodeCursor,
+  encodeCursor,
+  getOrderClauses,
+  isSortOption,
+  PAGE_SIZE,
+  type SortOption,
+} from "@/lib/marketplaceDiscovery";
 import { AppHeader } from "@/components/AppHeader";
 import { ProfileLink } from "@/components/ProfileLink";
 import { ListingMedia } from "./ListingMedia";
+import { MarketplaceFilters } from "./MarketplaceFilters";
 
 type Listing = {
   id: string;
@@ -21,7 +34,20 @@ type Listing = {
   created_at: string;
 };
 
-export default async function Marketplace() {
+export default async function Marketplace({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    q?: string;
+    category?: string;
+    minPrice?: string;
+    maxPrice?: string;
+    sort?: string;
+    before?: string;
+  }>;
+}) {
+  const params = await searchParams;
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -31,21 +57,108 @@ export default async function Marketplace() {
     redirect("/sign-in");
   }
 
-  const { data: listings, error } = await supabase
-    .from("listings")
-    .select(
-      "id, profile_id, title, description, category, listing_type, price, price_unit, location, seller_display_name, created_at",
-    )
-    .order("created_at", { ascending: false })
-    .limit(50);
+  const q = params.q?.trim() || undefined;
+  const categoryId = params.category || undefined;
 
-  // Batched, not one query per listing (N+1) -- same fetch-then-map
-  // shape already used for posts' media across the rest of this app.
-  // Resolves to an empty Map (never throws) if listing_media doesn't
-  // exist yet or a listing simply has no photos, so a listing with zero
-  // media renders exactly as it always has.
-  const listingIds = (listings ?? []).map((listing) => listing.id);
+  const parsedMinPrice = params.minPrice !== undefined ? Number(params.minPrice) : undefined;
+  const minPrice =
+    parsedMinPrice !== undefined && Number.isFinite(parsedMinPrice) && parsedMinPrice >= 0
+      ? parsedMinPrice
+      : undefined;
+
+  const parsedMaxPrice = params.maxPrice !== undefined ? Number(params.maxPrice) : undefined;
+  const maxPrice =
+    parsedMaxPrice !== undefined && Number.isFinite(parsedMaxPrice) && parsedMaxPrice >= 0
+      ? parsedMaxPrice
+      : undefined;
+
+  const sort: SortOption = isSortOption(params.sort) ? params.sort : "newest";
+  const cursor = params.before ? decodeCursor(params.before) : null;
+
+  // Whether the shopper has narrowed the result set at all -- distinct
+  // from `before` (pagination), which doesn't mean "filtered," it means
+  // "further down the same list." Used below to choose the correct
+  // empty-state message: a genuinely empty Marketplace ("be the first
+  // to post one") is a different situation from a search/filter that
+  // simply matched nothing.
+  const hasActiveFilter = Boolean(
+    q || categoryId || minPrice !== undefined || maxPrice !== undefined,
+  );
+
+  const [{ data: categoriesData }, listingsResult] = await Promise.all([
+    supabase
+      .from("marketplace_categories")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true }),
+    (async () => {
+      let query = supabase
+        .from("listings")
+        .select(
+          "id, profile_id, title, description, category, listing_type, price, price_unit, location, seller_display_name, created_at",
+        );
+
+      if (categoryId) {
+        query = query.eq("category_id", categoryId);
+      }
+      if (minPrice !== undefined) {
+        query = query.gte("price", minPrice);
+      }
+      if (maxPrice !== undefined) {
+        query = query.lte("price", maxPrice);
+      }
+      // Server-side only -- never fetches the full table to filter in
+      // the browser. Safe against literal %, _, and PostgREST filter
+      // syntax characters (see buildSearchFilter/escapeSearchTerm),
+      // verified empirically against the live database.
+      if (q) {
+        query = query.or(buildSearchFilter(q));
+      }
+
+      for (const clause of getOrderClauses(sort)) {
+        query = query.order(clause.column, {
+          ascending: clause.ascending,
+          nullsFirst: clause.nullsFirst,
+        });
+      }
+
+      // Keyset/cursor pagination, not OFFSET -- the predicate always
+      // includes the listing id as a deterministic tie-breaker
+      // alongside whichever column this sort orders by, so identical
+      // created_at or price values can never cause a skipped or
+      // duplicated listing across pages.
+      if (cursor) {
+        const cursorFilter = buildCursorFilter(sort, cursor);
+        if (cursorFilter) {
+          query = query.or(cursorFilter);
+        }
+      }
+
+      return query.limit(PAGE_SIZE + 1);
+    })(),
+  ]);
+
+  const categories = categoriesData ?? [];
+  const { data: listingsRaw, error } = listingsResult;
+
+  const hasMore = (listingsRaw?.length ?? 0) > PAGE_SIZE;
+  const listings = ((listingsRaw ?? []) as Listing[]).slice(0, PAGE_SIZE);
+  const lastListing = listings.at(-1);
+  const nextCursor =
+    hasMore && lastListing
+      ? encodeCursor(cursorValueForRow(sort, lastListing), lastListing.id)
+      : null;
+
+  const listingIds = listings.map((listing) => listing.id);
   const listingMediaByListingId = await fetchListingMediaByListingId(supabase, listingIds);
+
+  const currentParams = {
+    q: params.q,
+    category: params.category,
+    minPrice: params.minPrice,
+    maxPrice: params.maxPrice,
+    sort: params.sort,
+  };
 
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
@@ -63,10 +176,19 @@ export default async function Marketplace() {
 
           <Link
             href="/marketplace/new"
-            className="mt-4 inline-flex items-center justify-center rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep"
+            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep"
           >
             Create listing
           </Link>
+
+          <MarketplaceFilters
+            categories={categories}
+            initialQuery={params.q ?? ""}
+            initialCategory={params.category ?? ""}
+            initialMinPrice={params.minPrice ?? ""}
+            initialMaxPrice={params.maxPrice ?? ""}
+            initialSort={sort}
+          />
         </div>
 
         {error && (
@@ -78,15 +200,35 @@ export default async function Marketplace() {
           </p>
         )}
 
-        {!error && (listings?.length ?? 0) === 0 && (
+        {!error && listings.length === 0 && hasActiveFilter && (
+          <div className="mt-6 w-full max-w-sm">
+            <p className="text-sm text-shamba-ink-soft">
+              No listings match your search or filters.
+            </p>
+            <Link
+              href="/marketplace"
+              className="mt-2 inline-flex min-h-11 items-center font-sans text-sm font-semibold text-shamba-green hover:underline"
+            >
+              Reset filters
+            </Link>
+          </div>
+        )}
+
+        {!error && listings.length === 0 && !hasActiveFilter && cursor && (
+          <p className="mt-6 w-full max-w-sm text-sm text-shamba-ink-soft">
+            You&apos;ve reached the end of the results.
+          </p>
+        )}
+
+        {!error && listings.length === 0 && !hasActiveFilter && !cursor && (
           <p className="mt-6 w-full max-w-sm text-sm text-shamba-ink-soft">
             No listings yet. Be the first to post one.
           </p>
         )}
 
-        {!error && listings && listings.length > 0 && (
+        {!error && listings.length > 0 && (
           <div className="mt-6 flex w-full max-w-sm flex-col gap-3">
-            {(listings as Listing[]).map((listing) => (
+            {listings.map((listing) => (
               <article
                 key={listing.id}
                 className="rounded-shamba border border-shamba-line bg-shamba-card p-4"
@@ -148,6 +290,19 @@ export default async function Marketplace() {
                 </p>
               </article>
             ))}
+
+            {nextCursor ? (
+              <Link
+                href={buildMarketplaceHref({ ...currentParams, before: nextCursor })}
+                className="mt-2 inline-flex min-h-11 items-center justify-center rounded-shamba border border-shamba-line px-6 py-3 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-card"
+              >
+                Load more
+              </Link>
+            ) : (
+              <p className="mt-2 text-center text-xs text-shamba-ink-soft">
+                You&apos;ve reached the end of the results.
+              </p>
+            )}
           </div>
         )}
       </main>
