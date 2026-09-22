@@ -12,6 +12,7 @@ type Listing = {
   title: string;
   description: string;
   category: string;
+  category_id: string | null;
   listing_type: "for_sale" | "wanted";
   price: number | null;
   price_unit: string | null;
@@ -36,7 +37,9 @@ export default async function EditListing({
 
   const { data: listing } = await supabase
     .from("listings")
-    .select("id, profile_id, title, description, category, listing_type, price, price_unit, location")
+    .select(
+      "id, profile_id, title, description, category, category_id, listing_type, price, price_unit, location",
+    )
     .eq("id", id)
     .maybeSingle();
 
@@ -57,12 +60,29 @@ export default async function EditListing({
     redirect(`/marketplace/${typedListing.id}`);
   }
 
-  const [{ data: communities }, existingPhotos] = await Promise.all([
-    supabase.from("communities").select("name").order("name"),
+  const [{ data: categoriesData }, existingPhotos] = await Promise.all([
+    supabase
+      .from("marketplace_categories")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true }),
     fetchEditableListingMedia(supabase, typedListing.id),
   ]);
 
-  const categories = (communities ?? []).map((c) => c.name);
+  const categories = categoriesData ?? [];
+
+  // Prefer the stable category_id relationship. Fall back to matching
+  // the legacy free-text category against a current category's name --
+  // safe for any listing saved before Batch M1 (or otherwise not yet
+  // backfilled) rather than assuming every listing already has a
+  // category_id. If neither resolves, default to the first category so
+  // the select always has a valid value instead of silently mismatching
+  // whatever the browser happens to render for an unmatched one.
+  const resolvedCategoryId =
+    typedListing.category_id ??
+    categories.find((option) => option.name === typedListing.category)?.id ??
+    categories[0]?.id ??
+    "";
 
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
@@ -93,7 +113,7 @@ export default async function EditListing({
               initialValues={{
                 title: typedListing.title,
                 description: typedListing.description,
-                category: typedListing.category,
+                categoryId: resolvedCategoryId,
                 listingType: typedListing.listing_type,
                 price: typedListing.price !== null ? String(typedListing.price) : "",
                 priceUnit: typedListing.price_unit ?? "",

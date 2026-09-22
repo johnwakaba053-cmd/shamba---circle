@@ -20,6 +20,14 @@ const ACCEPTED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 type ListingType = "for_sale" | "wanted";
 
+// Marketplace's own product taxonomy (public.marketplace_categories) --
+// independent of Communities' discussion taxonomy (public.communities).
+// Selecting by stable `id`, not by display name, is what Batch M1 fixes:
+// a listing's category_id keeps pointing at the same row even if that
+// category's `name` is later renamed, unlike the old text-only category
+// that silently orphaned when a Community's name changed.
+export type MarketplaceCategoryOption = { id: string; name: string };
+
 type Status =
   | { kind: "idle" }
   | { kind: "loading" }
@@ -37,13 +45,13 @@ export function ListingForm({
   initialValues,
   initialPhotos = [],
 }: {
-  categories: string[];
+  categories: MarketplaceCategoryOption[];
   mode?: "create" | "edit";
   listingId?: string;
   initialValues?: {
     title: string;
     description: string;
-    category: string;
+    categoryId: string;
     listingType: ListingType;
     price: string;
     priceUnit: string;
@@ -56,7 +64,9 @@ export function ListingForm({
 
   const [title, setTitle] = useState(initialValues?.title ?? "");
   const [description, setDescription] = useState(initialValues?.description ?? "");
-  const [category, setCategory] = useState(initialValues?.category ?? categories[0] ?? "");
+  const [categoryId, setCategoryId] = useState(
+    initialValues?.categoryId ?? categories[0]?.id ?? "",
+  );
   const [listingType, setListingType] = useState<ListingType>(
     initialValues?.listingType ?? "for_sale",
   );
@@ -144,7 +154,8 @@ export function ListingForm({
       setStatus({ kind: "error", message: "Enter a description for your listing." });
       return;
     }
-    if (!category) {
+    const selectedCategory = categories.find((option) => option.id === categoryId);
+    if (!selectedCategory) {
       setStatus({ kind: "error", message: "Choose a category." });
       return;
     }
@@ -175,7 +186,14 @@ export function ListingForm({
       const fields = {
         title: trimmedTitle,
         description: trimmedDescription,
-        category,
+        // Both written together during this transition: `category`
+        // (free text) is what every existing read path (browse, detail)
+        // still displays, kept in sync with the chosen category's name
+        // so nothing there needs to change in this batch; `category_id`
+        // is the new stable-identity relationship going forward. See
+        // public.marketplace_categories.
+        category: selectedCategory.name,
+        category_id: selectedCategory.id,
         listing_type: listingType,
         price: parsedPrice,
         price_unit: priceUnit.trim() || null,
@@ -450,14 +468,14 @@ export function ListingForm({
         </label>
         <select
           id="category"
-          value={category}
-          onChange={(event) => setCategory(event.target.value)}
+          value={categoryId}
+          onChange={(event) => setCategoryId(event.target.value)}
           disabled={isLoading}
           className="rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
         >
-          {categories.map((name) => (
-            <option key={name} value={name}>
-              {name}
+          {categories.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
             </option>
           ))}
         </select>

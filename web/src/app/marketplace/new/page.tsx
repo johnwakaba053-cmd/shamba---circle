@@ -13,15 +13,17 @@ export default async function NewListing() {
     redirect("/sign-in");
   }
 
-  // Reuse the existing agricultural taxonomy (the same communities
-  // already used across the app) as the category options, rather than
-  // inventing a separate marketplace-only list.
-  const { data: communities } = await supabase
-    .from("communities")
-    .select("name")
-    .order("name");
+  // Marketplace's own product taxonomy (Batch M1) -- independent of
+  // Communities' discussion taxonomy. Previously this borrowed
+  // communities.name directly, which had no referential integrity: a
+  // Community rename silently orphaned any listing using the old name.
+  const { data: categoriesData } = await supabase
+    .from("marketplace_categories")
+    .select("id, name")
+    .eq("is_active", true)
+    .order("sort_order", { ascending: true });
 
-  const categories = (communities ?? []).map((c) => c.name);
+  const categories = categoriesData ?? [];
 
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
