@@ -264,22 +264,33 @@ export default async function Marketplace({
         )}
 
         {!error && listings.length > 0 && (
-          <div className="mt-6 flex w-full max-w-sm flex-col gap-3">
-            {listings.map((listing) => (
-              <article
-                key={listing.id}
-                className="rounded-shamba border border-shamba-line bg-shamba-card p-4"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <h2 className="font-display text-base font-semibold leading-tight text-shamba-ink">
-                    <Link
-                      href={`/marketplace/${listing.id}`}
-                      className="transition-colors hover:text-shamba-green hover:underline"
-                    >
-                      {listing.title}
-                    </Link>
-                  </h2>
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <div className="mt-6 flex w-full flex-col items-center gap-4">
+            {/* Listing-card grid only -- 2 columns on phone/tablet, 3 on
+                desktop (lg: ≥1024px). Everything above (header, filters)
+                and below (pagination) stays outside this grid, in normal
+                block flow, unchanged. The outer flex-col here has no
+                width cap of its own beyond the page's existing
+                max-w-5xl <main>, so the grid can use the same desktop
+                width the rest of the page already does, rather than
+                staying pinned to the old max-w-sm single-column width. */}
+            <div className="grid w-full grid-cols-2 gap-3 lg:grid-cols-3 lg:gap-4">
+              {listings.map((listing) => (
+                <article
+                  key={listing.id}
+                  className="flex flex-col rounded-shamba border border-shamba-line bg-shamba-card p-3"
+                >
+                  <ListingMedia
+                    items={listingMediaByListingId.get(listing.id) ?? []}
+                    listingTitle={listing.title}
+                  />
+
+                  {/* Badges moved to their own row below the image
+                      (rather than beside the title) so both the badges
+                      and the title each get the card's full width to
+                      wrap into -- at a 2-column phone width, title text
+                      and a "For Hire"/"Sold" badge pair no longer have
+                      to compete for the same line. */}
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
                     <span
                       className={`rounded-shamba ${LISTING_TYPE_BADGE[listing.listing_type].className} px-2 py-1 font-mono text-xs font-semibold text-shamba-card`}
                     >
@@ -291,55 +302,65 @@ export default async function Marketplace({
                       </span>
                     )}
                   </div>
-                </div>
 
-                <ListingMedia
-                  items={listingMediaByListingId.get(listing.id) ?? []}
-                  listingTitle={listing.title}
-                />
+                  <h2 className="mt-2 font-display text-base font-semibold leading-tight text-shamba-ink">
+                    <Link
+                      href={`/marketplace/${listing.id}`}
+                      className="transition-colors hover:text-shamba-green hover:underline"
+                    >
+                      {listing.title}
+                    </Link>
+                  </h2>
 
-                <p className="mt-1 font-mono text-xs text-shamba-ink-soft">
-                  {listing.category}
-                </p>
-
-                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-shamba-ink-soft">
-                  {listing.description}
-                </p>
-
-                {listing.price !== null && (
-                  <p className="mt-2 font-sans text-sm font-semibold text-shamba-ink">
-                    {listing.price}
-                    {listing.price_unit ? ` ${listing.price_unit}` : ""}
+                  <p className="mt-1 font-mono text-xs text-shamba-ink-soft">
+                    {listing.category}
                   </p>
-                )}
 
-                {(listing.counties?.name || listing.location) && (
-                  <p className="mt-1 flex items-center gap-1 text-xs text-shamba-ink-soft">
-                    <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-                    {[listing.counties?.name, listing.location].filter(Boolean).join(" · ")}
+                  {/* line-clamp keeps every card's description block the
+                      same height regardless of length, so grid rows stay
+                      visually aligned -- the full text is still only a
+                      tap away on the detail page, nothing is removed. */}
+                  <p className="mt-2 line-clamp-2 whitespace-pre-wrap text-sm leading-6 text-shamba-ink-soft">
+                    {listing.description}
                   </p>
-                )}
 
-                <p className="mt-2 text-xs text-shamba-ink-soft">
-                  Listed by{" "}
-                  <ProfileLink
-                    profileId={listing.profile_id}
-                    displayName={listing.seller_display_name}
-                    className="font-semibold text-shamba-ink-soft"
-                  />
-                </p>
-              </article>
-            ))}
+                  {listing.price !== null && (
+                    <p className="mt-2 font-sans text-sm font-semibold text-shamba-ink">
+                      {listing.price}
+                      {listing.price_unit ? ` ${listing.price_unit}` : ""}
+                    </p>
+                  )}
+
+                  {(listing.counties?.name || listing.location) && (
+                    <p className="mt-1 flex items-center gap-1 text-xs text-shamba-ink-soft">
+                      <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
+                      <span className="truncate">
+                        {[listing.counties?.name, listing.location].filter(Boolean).join(" · ")}
+                      </span>
+                    </p>
+                  )}
+
+                  <p className="mt-2 truncate text-xs text-shamba-ink-soft">
+                    Listed by{" "}
+                    <ProfileLink
+                      profileId={listing.profile_id}
+                      displayName={listing.seller_display_name}
+                      className="font-semibold text-shamba-ink-soft"
+                    />
+                  </p>
+                </article>
+              ))}
+            </div>
 
             {nextCursor ? (
               <Link
                 href={buildMarketplaceHref({ ...currentParams, before: nextCursor })}
-                className="mt-2 inline-flex min-h-11 items-center justify-center rounded-shamba border border-shamba-line px-6 py-3 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-card"
+                className="inline-flex min-h-11 items-center justify-center rounded-shamba border border-shamba-line px-6 py-3 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-card"
               >
                 Load more
               </Link>
             ) : (
-              <p className="mt-2 text-center text-xs text-shamba-ink-soft">
+              <p className="text-center text-xs text-shamba-ink-soft">
                 You&apos;ve reached the end of the results.
               </p>
             )}
