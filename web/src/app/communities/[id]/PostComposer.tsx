@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, ImagePlus, Loader2, X } from "lucide-react";
+import { Camera, Loader2, Plus, Send, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 const MAX_BODY_LENGTH = 2000;
 const MAX_MEDIA_FILES = 4;
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8MB
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024; // 100MB, matches the Storage bucket's own cap
+const MAX_TEXTAREA_HEIGHT_PX = 128; // matches the textarea's own max-h-32
 const ACCEPTED_MEDIA_TYPES = [
   "image/jpeg",
   "image/png",
@@ -23,6 +24,12 @@ type Status =
   | { kind: "success" }
   | { kind: "error"; message: string };
 
+// Message-bar composer: same posts+post_media insert/upload/rollback
+// logic as before this batch, restyled as a compact "type a message"
+// bar (text input, attach, camera, send) instead of a standalone card
+// with a big textarea and separate buttons below it, per the Batch 1
+// conversation redesign. Rendered inside CommunityConversation.tsx's
+// fixed-to-viewport-bottom panel.
 export function PostComposer({
   communityId,
   isMember,
@@ -33,6 +40,7 @@ export function PostComposer({
   const router = useRouter();
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [body, setBody] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [mediaError, setMediaError] = useState<string | null>(null);
@@ -41,6 +49,7 @@ export function PostComposer({
   const isLoading = status.kind === "loading";
   const trimmedLength = body.trim().length;
   const remaining = MAX_BODY_LENGTH - body.length;
+  const mediaLimitReached = selectedFiles.length >= MAX_MEDIA_FILES;
 
   // Object URLs are only valid client-side. Derive them from the current
   // selection with useMemo (not useState+setState-in-effect); the effect
@@ -90,6 +99,19 @@ export function PostComposer({
     setMediaError(null);
   }
 
+  // Grows the textarea with its content, up to MAX_TEXTAREA_HEIGHT_PX
+  // (matching the max-h-32 below), so a long message stays fully visible
+  // instead of scrolling inside a fixed one-line box -- a plain
+  // imperative style write on the element itself, independent of the
+  // controlled `value`, is enough here and avoids a layout-measuring
+  // effect for something this small.
+  function handleBodyChange(event: React.ChangeEvent<HTMLTextAreaElement>) {
+    const el = event.target;
+    setBody(el.value.slice(0, MAX_BODY_LENGTH));
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT_PX)}px`;
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -97,7 +119,7 @@ export function PostComposer({
 
     const trimmed = body.trim();
     if (trimmed.length === 0) {
-      setStatus({ kind: "error", message: "Write something before posting." });
+      setStatus({ kind: "error", message: "Write something before sending." });
       return;
     }
 
@@ -123,7 +145,7 @@ export function PostComposer({
       if (postError || !newPost) {
         setStatus({
           kind: "error",
-          message: "We couldn't post that. Please try again.",
+          message: "We couldn't send that. Please try again.",
         });
         return;
       }
@@ -185,6 +207,9 @@ export function PostComposer({
       setSelectedFiles([]);
       setMediaError(null);
       setStatus({ kind: "success" });
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
       router.refresh();
     } catch {
       setStatus({
@@ -196,32 +221,60 @@ export function PostComposer({
 
   if (!isMember) {
     return (
-      <p className="mt-4 text-sm text-shamba-ink-soft">
-        Join this community to share a post.
+      <p className="px-1 py-3 text-center text-sm text-shamba-ink-soft">
+        Join this community to send a message.
       </p>
     );
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-4 flex flex-col gap-3">
-      <textarea
-        value={body}
-        onChange={(event) => setBody(event.target.value.slice(0, MAX_BODY_LENGTH))}
-        disabled={isLoading}
-        rows={4}
-        maxLength={MAX_BODY_LENGTH}
-        placeholder="Share something with this community…"
-        className="rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink placeholder:text-shamba-ink-soft focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
-      />
+    <form onSubmit={handleSubmit} className="flex flex-col gap-1.5">
+      {selectedFiles.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {selectedFiles.map((file, index) => (
+            <div key={index} className="relative shrink-0">
+              {file.type.startsWith("video/") ? (
+                <video
+                  src={previewUrls[index]}
+                  muted
+                  className="size-16 rounded-shamba border border-shamba-line object-cover"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={previewUrls[index]}
+                  alt=""
+                  className="size-16 rounded-shamba border border-shamba-line object-cover"
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => removeFile(index)}
+                disabled={isLoading}
+                aria-label={`Remove ${file.name}`}
+                className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-shamba-rust text-shamba-card disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <X className="size-3.5" aria-hidden="true" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
-      <div className="flex flex-col gap-2">
+      {mediaError && (
+        <p role="alert" className="text-xs font-semibold text-shamba-rust">
+          {mediaError}
+        </p>
+      )}
+
+      <div className="flex items-end gap-1.5">
         <input
           ref={galleryInputRef}
           type="file"
           accept={ACCEPTED_MEDIA_TYPES.join(",")}
           multiple
           onChange={handleFilesSelected}
-          disabled={isLoading || selectedFiles.length >= MAX_MEDIA_FILES}
+          disabled={isLoading || mediaLimitReached}
           className="hidden"
         />
 
@@ -231,95 +284,73 @@ export function PostComposer({
           accept="image/*"
           capture="environment"
           onChange={handleFilesSelected}
-          disabled={isLoading || selectedFiles.length >= MAX_MEDIA_FILES}
+          disabled={isLoading || mediaLimitReached}
           className="hidden"
         />
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => cameraInputRef.current?.click()}
-            disabled={isLoading || selectedFiles.length >= MAX_MEDIA_FILES}
-            className="inline-flex w-fit items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            <Camera className="size-4" aria-hidden="true" />
-            Camera
-          </button>
+        <button
+          type="button"
+          onClick={() => galleryInputRef.current?.click()}
+          disabled={isLoading || mediaLimitReached}
+          aria-label="Attach a photo or video"
+          title="Attach a photo or video"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full border border-shamba-line text-shamba-ink-soft transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Plus className="size-5" aria-hidden="true" />
+        </button>
 
-          <button
-            type="button"
-            onClick={() => galleryInputRef.current?.click()}
-            disabled={isLoading || selectedFiles.length >= MAX_MEDIA_FILES}
-            className="inline-flex w-fit items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            <ImagePlus className="size-4" aria-hidden="true" />
-            Add photo or video
-          </button>
-        </div>
+        <textarea
+          ref={textareaRef}
+          value={body}
+          onChange={handleBodyChange}
+          disabled={isLoading}
+          rows={1}
+          maxLength={MAX_BODY_LENGTH}
+          aria-label="Message"
+          placeholder="Type a message…"
+          className="min-h-11 max-h-32 flex-1 resize-none overflow-y-auto rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-2.5 font-sans text-base leading-6 text-shamba-ink placeholder:text-shamba-ink-soft focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
+        />
 
-        {mediaError && (
-          <p role="alert" className="text-xs font-semibold text-shamba-rust">
-            {mediaError}
-          </p>
-        )}
-
-        {selectedFiles.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {selectedFiles.map((file, index) => (
-              <div key={index} className="relative">
-                {file.type.startsWith("video/") ? (
-                  <video
-                    src={previewUrls[index]}
-                    muted
-                    className="size-20 rounded-shamba border border-shamba-line object-cover"
-                  />
-                ) : (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={previewUrls[index]}
-                    alt=""
-                    className="size-20 rounded-shamba border border-shamba-line object-cover"
-                  />
-                )}
-                <button
-                  type="button"
-                  onClick={() => removeFile(index)}
-                  disabled={isLoading}
-                  aria-label={`Remove ${file.name}`}
-                  className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-shamba-rust text-shamba-card disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  <X className="size-3.5" aria-hidden="true" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-xs text-shamba-ink-soft">
-          {remaining} characters left
-        </span>
+        {/* Camera capture is a plain HTML file input with capture="environment"
+            -- there's no separate native app dependency here. Where a device
+            has no camera (most desktops), the browser falls back to its
+            normal file picker, so this button still works everywhere, it just
+            may not open a live camera on desktop. */}
+        <button
+          type="button"
+          onClick={() => cameraInputRef.current?.click()}
+          disabled={isLoading || mediaLimitReached}
+          aria-label="Take a photo"
+          title="Take a photo"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full border border-shamba-line text-shamba-ink-soft transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Camera className="size-5" aria-hidden="true" />
+        </button>
 
         <button
           type="submit"
           disabled={isLoading || trimmedLength === 0}
-          className="inline-flex items-center justify-center gap-2 rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep disabled:cursor-not-allowed disabled:opacity-70"
+          aria-label="Send message"
+          title="Send"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-shamba-green text-shamba-card transition-colors hover:bg-shamba-green-deep disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-          {isLoading ? "Posting…" : "Post"}
+          {isLoading ? (
+            <Loader2 className="size-5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Send className="size-5" aria-hidden="true" />
+          )}
         </button>
       </div>
 
-      {status.kind === "error" && (
-        <p role="alert" className="text-sm font-semibold text-shamba-rust">
-          {status.message}
+      {remaining <= 300 && (
+        <p className="text-right font-mono text-xs text-shamba-ink-soft">
+          {remaining} characters left
         </p>
       )}
 
-      {status.kind === "success" && (
-        <p role="status" className="text-sm font-semibold text-shamba-green">
-          Posted.
+      {status.kind === "error" && (
+        <p role="alert" className="text-xs font-semibold text-shamba-rust">
+          {status.message}
         </p>
       )}
     </form>

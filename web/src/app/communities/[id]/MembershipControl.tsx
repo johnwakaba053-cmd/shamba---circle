@@ -18,10 +18,17 @@ export function MembershipControl({
   communityId,
   initialIsMember,
   initialMemberCount,
+  compact = false,
 }: {
   communityId: string;
   initialIsMember: boolean;
   initialMemberCount: number;
+  // Slim, single-row rendering (count + button side by side, no
+  // standalone heading-sized text) for the Batch 1 conversation header,
+  // which has its own tighter layout than the original card-style
+  // header this component was first built for. Same join/leave logic
+  // either way -- this only changes what's returned.
+  compact?: boolean;
 }) {
   const [isMember, setIsMember] = useState(initialIsMember);
   const [memberCount, setMemberCount] = useState(initialMemberCount);
@@ -109,6 +116,46 @@ export function MembershipControl({
         message: "Something went wrong. Please try again in a moment.",
       });
     }
+  }
+
+  if (compact) {
+    return (
+      <div className="flex w-full items-center justify-between gap-3">
+        <p className="font-mono text-xs text-shamba-ink-soft">
+          {memberCount} {memberCount === 1 ? "farmer" : "farmers"}
+        </p>
+
+        <div className="flex items-center gap-2">
+          {status.kind === "error" && (
+            <p role="alert" className="text-xs font-semibold text-shamba-rust">
+              {status.message}
+            </p>
+          )}
+
+          {isMember ? (
+            <button
+              type="button"
+              onClick={handleLeave}
+              disabled={isLoading}
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-shamba border border-shamba-line px-4 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isLoading && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+              {isLoading ? "Leaving…" : "Leave"}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleJoin}
+              disabled={isLoading}
+              className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-shamba bg-shamba-green px-4 font-sans text-sm font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isLoading && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
+              {isLoading ? "Joining…" : "Join"}
+            </button>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (

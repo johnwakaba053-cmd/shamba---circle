@@ -1,24 +1,17 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, HelpCircle, PawPrint, Wheat } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { ProfileLink } from "@/components/ProfileLink";
 import { MembershipControl } from "./MembershipControl";
 import { PostComposer } from "./PostComposer";
 import { PostLikeControl } from "./PostLikeControl";
-import { PostCommentComposer } from "./PostCommentComposer";
-import { PostCommentItem } from "./PostCommentItem";
+import { PostCommentsSection } from "./PostCommentsSection";
 import { PostDeleteControl } from "./PostDeleteControl";
-import { PostCommentReactions } from "./PostCommentReactions";
 import { PostMedia } from "./PostMedia";
+import { CommunityConversation } from "./CommunityConversation";
 import { fetchPostMediaByPostId } from "@/lib/postMedia";
-
-const GROUP_ICON: Record<string, typeof Wheat> = {
-  "Crop Farmers": Wheat,
-  "Animal Farmers": PawPrint,
-  Other: HelpCircle,
-};
 
 type PostCommentRow = {
   id: string;
@@ -47,7 +40,7 @@ export default async function CommunityDetail({
 
   const { data: community } = await supabase
     .from("communities")
-    .select("id, name, group_name")
+    .select("id, name, emoji")
     .eq("id", id)
     .maybeSingle();
 
@@ -73,9 +66,14 @@ export default async function CommunityDetail({
 
   const isMember = Boolean(membership);
   const memberCount = Number(memberCountData ?? 0);
-  const Icon = GROUP_ICON[community.group_name] ?? HelpCircle;
 
-  const postIds = (posts ?? []).map((post) => post.id);
+  // Same query/limit as before this batch (the most recent 50 posts --
+  // cursor pagination is explicitly out of scope here), just displayed
+  // oldest-first so the conversation reads top-to-bottom like a chat
+  // thread, with the newest message sitting just above the composer.
+  const orderedPosts = [...(posts ?? [])].reverse();
+
+  const postIds = orderedPosts.map((post) => post.id);
 
   const postMediaByPostId = await fetchPostMediaByPostId(supabase, postIds);
 
@@ -137,124 +135,113 @@ export default async function CommunityDetail({
     ]),
   );
 
+  const commentsFailed = Boolean(commentsError);
+
+  // Changes whenever the newest post changes (first load, and again
+  // right after this viewer sends one) -- see CommunityConversation.tsx,
+  // which re-scrolls to the bottom whenever this key changes.
+  const scrollKey = `${orderedPosts.length}:${orderedPosts.at(-1)?.id ?? "empty"}`;
+
+  const composer = <PostComposer communityId={community.id} isMember={isMember} />;
+
   return (
-    <div className="flex flex-1 flex-col bg-shamba-bg">
+    <div className="flex min-h-[100dvh] flex-col bg-shamba-bg">
+      {/* Restored per Batch 1 QA corrections: this page must keep the
+          normal app-wide navigation (Communities/Feed/Marketplace/Market
+          Prices/Education/Alerts/Profile/Sign out) reachable directly from
+          inside a community, not only via the back arrow below. AppHeader
+          is reused completely unmodified -- no parallel nav is built here. */}
       <AppHeader />
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
-        <div className="w-full max-w-sm rounded-shamba border border-shamba-line bg-shamba-card p-6 sm:p-8">
-          <Icon className="size-7 text-shamba-green" aria-hidden="true" />
-
-          <h1 className="mt-4 font-display text-2xl font-bold leading-tight tracking-tight text-shamba-ink">
+      <header className="sticky top-0 z-10 w-full border-b border-shamba-line bg-shamba-card">
+        <div className="mx-auto flex w-full max-w-sm items-center gap-3 px-4 py-3">
+          <Link
+            href="/communities"
+            aria-label="Back to Communities"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-bg hover:text-shamba-ink"
+          >
+            <ArrowLeft className="size-5" aria-hidden="true" />
+          </Link>
+          <span className="text-2xl" aria-hidden="true">
+            {community.emoji ?? "🌾"}
+          </span>
+          <h1 className="min-w-0 flex-1 truncate font-display text-lg font-bold leading-tight text-shamba-ink">
             {community.name}
           </h1>
-          <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
-            {community.group_name}
-          </p>
-
+        </div>
+        <div className="mx-auto w-full max-w-sm px-4 pb-3">
           <MembershipControl
+            compact
             communityId={community.id}
             initialIsMember={isMember}
             initialMemberCount={memberCount}
           />
         </div>
+      </header>
 
-        <section className="mt-10 w-full max-w-sm">
-          <h2 className="font-display text-lg font-semibold text-shamba-ink">
-            Posts
-          </h2>
+      <CommunityConversation composer={composer} scrollKey={scrollKey}>
+        {postsError && (
+          <p role="alert" className="text-sm font-semibold text-shamba-rust">
+            We couldn&apos;t load this conversation right now. Please try again later.
+          </p>
+        )}
 
-          <PostComposer communityId={community.id} isMember={isMember} />
+        {!postsError && orderedPosts.length === 0 && (
+          <p className="text-sm text-shamba-ink-soft">
+            No messages yet. Be the first to say something in this community.
+          </p>
+        )}
 
-          {postsError && (
-            <p role="alert" className="mt-4 text-sm font-semibold text-shamba-rust">
-              We couldn&apos;t load posts right now. Please try again later.
-            </p>
-          )}
-
-          {!postsError && (posts?.length ?? 0) === 0 && (
-            <p className="mt-4 text-sm text-shamba-ink-soft">
-              No posts yet. Be the first to share something with this community.
-            </p>
-          )}
-
-          {!postsError && posts && posts.length > 0 && (
-            <div className="mt-4 flex flex-col gap-3">
-              {posts.map((post) => (
-                <article
-                  key={post.id}
-                  className="rounded-shamba border border-shamba-line bg-shamba-card p-4"
-                >
-                  <div className="flex items-baseline justify-between gap-2">
-                    <ProfileLink
-                      profileId={post.profile_id}
-                      displayName={post.author_display_name}
-                      className="font-sans text-sm font-semibold text-shamba-ink"
-                    />
-                    <p className="shrink-0 font-mono text-xs text-shamba-ink-soft">
-                      {new Date(post.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <p className="mt-1 whitespace-pre-wrap text-base leading-6 text-shamba-ink-soft">
-                    {post.body}
+        {!postsError && orderedPosts.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {orderedPosts.map((post) => (
+              <article
+                key={post.id}
+                className="rounded-shamba border border-shamba-line bg-shamba-card p-4"
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <ProfileLink
+                    profileId={post.profile_id}
+                    displayName={post.author_display_name}
+                    className="font-sans text-sm font-semibold text-shamba-ink"
+                  />
+                  <p className="shrink-0 font-mono text-xs text-shamba-ink-soft">
+                    {new Date(post.created_at).toLocaleDateString()}
                   </p>
-                  <PostMedia items={postMediaByPostId.get(post.id) ?? []} />
-                  <PostDeleteControl postId={post.id} isAuthor={post.profile_id === user.id} />
+                </div>
+                <p className="mt-1 whitespace-pre-wrap text-base leading-6 text-shamba-ink-soft">
+                  {post.body}
+                </p>
+                <PostMedia items={postMediaByPostId.get(post.id) ?? []} />
+                <PostDeleteControl postId={post.id} isAuthor={post.profile_id === user.id} />
+
+                <div className="flex flex-wrap items-start gap-4">
                   <PostLikeControl
                     postId={post.id}
                     isMember={isMember}
                     initialLiked={likedPostIds.has(post.id)}
                     initialLikeCount={likeCountByPostId.get(post.id) ?? 0}
                   />
-
-                  <div className="mt-3 flex flex-col gap-2 border-t border-shamba-line pt-3">
-                    {commentsError && (
-                      <p role="alert" className="text-xs font-semibold text-shamba-rust">
-                        We couldn&apos;t load comments right now.
-                      </p>
-                    )}
-
-                    {!commentsError && (commentsByPostId.get(post.id)?.length ?? 0) === 0 && (
-                      <p className="text-xs text-shamba-ink-soft">No comments yet.</p>
-                    )}
-
-                    {!commentsError &&
-                      commentsByPostId.get(post.id)?.map((comment) => (
-                        <div key={comment.id} className="flex flex-col gap-1.5">
-                          <PostCommentItem
-                            commentId={comment.id}
-                            authorProfileId={comment.profile_id}
-                            authorDisplayName={comment.author_display_name}
-                            body={comment.body}
-                            isAuthor={comment.profile_id === user.id}
-                          />
-                          <PostCommentReactions
-                            commentId={comment.id}
-                            isMember={isMember}
-                            initialMyReactionTypes={
-                              myReactionTypesByCommentId.get(comment.id) ?? []
-                            }
-                            initialCounts={reactionCountsByCommentId.get(comment.id) ?? []}
-                          />
-                        </div>
-                      ))}
-
-                    <PostCommentComposer postId={post.id} isMember={isMember} />
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <Link
-          href="/communities"
-          className="mt-6 inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
-        >
-          <ArrowLeft className="size-4" aria-hidden="true" />
-          Back to Communities
-        </Link>
-      </main>
+                  <PostCommentsSection
+                    postId={post.id}
+                    isMember={isMember}
+                    commentsFailed={commentsFailed}
+                    comments={(commentsByPostId.get(post.id) ?? []).map((comment) => ({
+                      id: comment.id,
+                      profileId: comment.profile_id,
+                      authorDisplayName: comment.author_display_name,
+                      body: comment.body,
+                      isAuthor: comment.profile_id === user.id,
+                      myReactionTypes: myReactionTypesByCommentId.get(comment.id) ?? [],
+                      reactionCounts: reactionCountsByCommentId.get(comment.id) ?? [],
+                    }))}
+                  />
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </CommunityConversation>
     </div>
   );
 }
