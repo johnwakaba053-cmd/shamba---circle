@@ -18,13 +18,23 @@ type Listing = {
   category: string;
   category_id: string | null;
   category_details: CategoryDetails | null;
-  listing_type: "for_sale" | "wanted";
+  listing_type: "for_sale" | "wanted" | "for_hire";
   status: "available" | "sold";
   price: number | null;
   price_unit: string | null;
   location: string | null;
+  county_id: string | null;
+  counties: { name: string } | null;
+  hire_deposit: number | null;
+  hire_minimum_period: string | null;
   seller_display_name: string;
   created_at: string;
+};
+
+const LISTING_TYPE_BADGE: Record<string, { label: string; className: string }> = {
+  for_sale: { label: "For Sale", className: "bg-shamba-green" },
+  wanted: { label: "Wanted", className: "bg-shamba-blue" },
+  for_hire: { label: "For Hire", className: "bg-shamba-ochre" },
 };
 
 export default async function ListingDetail({
@@ -50,7 +60,7 @@ export default async function ListingDetail({
   const { data: listing } = await supabase
     .from("listings")
     .select(
-      "id, profile_id, title, description, category, category_id, category_details, listing_type, status, price, price_unit, location, seller_display_name, created_at",
+      "id, profile_id, title, description, category, category_id, category_details, listing_type, status, price, price_unit, location, county_id, counties(name), hire_deposit, hire_minimum_period, seller_display_name, created_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -59,7 +69,12 @@ export default async function ListingDetail({
     notFound();
   }
 
-  const typedListing = listing as Listing;
+  // supabase-js infers this many-to-one embed (counties) as an array
+  // without generated Database types, but PostgREST actually returns a
+  // single nested object at runtime for a belongs-to FK -- same known
+  // quirk and same cast-through-unknown fix already used by
+  // fetchPostHashtagsByPostId in feed/hashtags.ts.
+  const typedListing = listing as unknown as Listing;
 
   // Empty for a NULL/empty category_details (every listing that
   // predates Batch M3, including the real production listing) or an
@@ -104,13 +119,9 @@ export default async function ListingDetail({
             </h1>
             <div className="flex shrink-0 flex-col items-end gap-1.5">
               <span
-                className={
-                  typedListing.listing_type === "for_sale"
-                    ? "rounded-shamba bg-shamba-green px-2 py-1 font-mono text-xs font-semibold text-shamba-card"
-                    : "rounded-shamba bg-shamba-blue px-2 py-1 font-mono text-xs font-semibold text-shamba-card"
-                }
+                className={`rounded-shamba ${LISTING_TYPE_BADGE[typedListing.listing_type].className} px-2 py-1 font-mono text-xs font-semibold text-shamba-card`}
               >
-                {typedListing.listing_type === "for_sale" ? "For Sale" : "Wanted"}
+                {LISTING_TYPE_BADGE[typedListing.listing_type].label}
               </span>
               {typedListing.status === "sold" && (
                 <span className="rounded-shamba bg-shamba-rust px-2 py-1 font-mono text-xs font-bold uppercase tracking-wide text-shamba-card">
@@ -127,12 +138,28 @@ export default async function ListingDetail({
             </p>
           )}
 
+          {/* Hire terms shown only for a For Hire listing, and only the
+              ones actually provided -- never "N/A", never shown at all
+              for For Sale/Wanted. Kept separate from the category
+              "Details" section below: these are listing-type-specific,
+              not category-specific. */}
+          {typedListing.listing_type === "for_hire" && typedListing.hire_deposit !== null && (
+            <p className="mt-1 text-sm text-shamba-ink-soft">
+              Deposit: {typedListing.hire_deposit}
+            </p>
+          )}
+          {typedListing.listing_type === "for_hire" && typedListing.hire_minimum_period && (
+            <p className="mt-1 text-sm text-shamba-ink-soft">
+              Minimum hire period: {typedListing.hire_minimum_period}
+            </p>
+          )}
+
           <p className="mt-1 font-mono text-xs text-shamba-ink-soft">{typedListing.category}</p>
 
-          {typedListing.location && (
+          {(typedListing.counties?.name || typedListing.location) && (
             <p className="mt-1 flex items-center gap-1 text-sm text-shamba-ink-soft">
               <MapPin className="size-4 shrink-0" aria-hidden="true" />
-              {typedListing.location}
+              {[typedListing.counties?.name, typedListing.location].filter(Boolean).join(" · ")}
             </p>
           )}
 

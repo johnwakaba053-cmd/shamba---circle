@@ -11,6 +11,7 @@ import {
   decodeCursor,
   encodeCursor,
   getOrderClauses,
+  isListingTypeFilter,
   isSortOption,
   PAGE_SIZE,
   type SortOption,
@@ -26,13 +27,26 @@ type Listing = {
   title: string;
   description: string;
   category: string;
-  listing_type: "for_sale" | "wanted";
+  listing_type: "for_sale" | "wanted" | "for_hire";
   status: "available" | "sold";
   price: number | null;
   price_unit: string | null;
   location: string | null;
+  county_id: string | null;
+  counties: { name: string } | null;
   seller_display_name: string;
   created_at: string;
+};
+
+// Marketplace 2.1: a third listing-type badge alongside the existing
+// two -- kept as a small local lookup (matching this codebase's own
+// convention of duplicating tiny per-page constants rather than
+// extracting a shared module for a 3-line switch, e.g. GROUP_ICON
+// elsewhere) rather than a new shared component.
+const LISTING_TYPE_BADGE: Record<string, { label: string; className: string }> = {
+  for_sale: { label: "For Sale", className: "bg-shamba-green" },
+  wanted: { label: "Wanted", className: "bg-shamba-blue" },
+  for_hire: { label: "For Hire", className: "bg-shamba-ochre" },
 };
 
 export default async function Marketplace({
@@ -44,6 +58,8 @@ export default async function Marketplace({
     minPrice?: string;
     maxPrice?: string;
     sort?: string;
+    county?: string;
+    listingType?: string;
     before?: string;
   }>;
 }) {
@@ -75,6 +91,8 @@ export default async function Marketplace({
 
   const sort: SortOption = isSortOption(params.sort) ? params.sort : "newest";
   const cursor = params.before ? decodeCursor(params.before) : null;
+  const countyId = params.county || undefined;
+  const listingType = isListingTypeFilter(params.listingType) ? params.listingType : undefined;
 
   // Whether the shopper has narrowed the result set at all -- distinct
   // from `before` (pagination), which doesn't mean "filtered," it means
@@ -83,20 +101,21 @@ export default async function Marketplace({
   // to post one") is a different situation from a search/filter that
   // simply matched nothing.
   const hasActiveFilter = Boolean(
-    q || categoryId || minPrice !== undefined || maxPrice !== undefined,
+    q || categoryId || minPrice !== undefined || maxPrice !== undefined || countyId || listingType,
   );
 
-  const [{ data: categoriesData }, listingsResult] = await Promise.all([
+  const [{ data: categoriesData }, { data: countiesData }, listingsResult] = await Promise.all([
     supabase
       .from("marketplace_categories")
       .select("id, name")
       .eq("is_active", true)
       .order("sort_order", { ascending: true }),
+    supabase.from("counties").select("id, name").order("name", { ascending: true }),
     (async () => {
       let query = supabase
         .from("listings")
         .select(
-          "id, profile_id, title, description, category, listing_type, status, price, price_unit, location, seller_display_name, created_at",
+          "id, profile_id, title, description, category, listing_type, status, price, price_unit, location, county_id, counties(name), seller_display_name, created_at",
         );
 
       if (categoryId) {
@@ -107,6 +126,15 @@ export default async function Marketplace({
       }
       if (maxPrice !== undefined) {
         query = query.lte("price", maxPrice);
+      }
+      // Marketplace 2.1: both additive-only, same shape as the existing
+      // category filter above -- never touches search/price/sort/
+      // pagination logic.
+      if (countyId) {
+        query = query.eq("county_id", countyId);
+      }
+      if (listingType) {
+        query = query.eq("listing_type", listingType);
       }
       // Server-side only -- never fetches the full table to filter in
       // the browser. Safe against literal %, _, and PostgREST filter
@@ -140,10 +168,13 @@ export default async function Marketplace({
   ]);
 
   const categories = categoriesData ?? [];
+  const counties = countiesData ?? [];
   const { data: listingsRaw, error } = listingsResult;
 
   const hasMore = (listingsRaw?.length ?? 0) > PAGE_SIZE;
-  const listings = ((listingsRaw ?? []) as Listing[]).slice(0, PAGE_SIZE);
+  // Same supabase-js embed-typing quirk as marketplace/[id]/page.tsx --
+  // PostgREST returns a single `counties` object per row, not an array.
+  const listings = ((listingsRaw ?? []) as unknown as Listing[]).slice(0, PAGE_SIZE);
   const lastListing = listings.at(-1);
   const nextCursor =
     hasMore && lastListing
@@ -159,6 +190,8 @@ export default async function Marketplace({
     minPrice: params.minPrice,
     maxPrice: params.maxPrice,
     sort: params.sort,
+    county: params.county,
+    listingType: params.listingType,
   };
 
   return (
@@ -184,11 +217,14 @@ export default async function Marketplace({
 
           <MarketplaceFilters
             categories={categories}
+            counties={counties}
             initialQuery={params.q ?? ""}
             initialCategory={params.category ?? ""}
             initialMinPrice={params.minPrice ?? ""}
             initialMaxPrice={params.maxPrice ?? ""}
             initialSort={sort}
+            initialCounty={params.county ?? ""}
+            initialListingType={params.listingType ?? ""}
           />
         </div>
 
@@ -245,13 +281,9 @@ export default async function Marketplace({
                   </h2>
                   <div className="flex shrink-0 flex-col items-end gap-1.5">
                     <span
-                      className={
-                        listing.listing_type === "for_sale"
-                          ? "rounded-shamba bg-shamba-green px-2 py-1 font-mono text-xs font-semibold text-shamba-card"
-                          : "rounded-shamba bg-shamba-blue px-2 py-1 font-mono text-xs font-semibold text-shamba-card"
-                      }
+                      className={`rounded-shamba ${LISTING_TYPE_BADGE[listing.listing_type].className} px-2 py-1 font-mono text-xs font-semibold text-shamba-card`}
                     >
-                      {listing.listing_type === "for_sale" ? "For Sale" : "Wanted"}
+                      {LISTING_TYPE_BADGE[listing.listing_type].label}
                     </span>
                     {listing.status === "sold" && (
                       <span className="rounded-shamba bg-shamba-rust px-2 py-1 font-mono text-xs font-bold uppercase tracking-wide text-shamba-card">
@@ -281,10 +313,10 @@ export default async function Marketplace({
                   </p>
                 )}
 
-                {listing.location && (
+                {(listing.counties?.name || listing.location) && (
                   <p className="mt-1 flex items-center gap-1 text-xs text-shamba-ink-soft">
                     <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-                    {listing.location}
+                    {[listing.counties?.name, listing.location].filter(Boolean).join(" · ")}
                   </p>
                 )}
 

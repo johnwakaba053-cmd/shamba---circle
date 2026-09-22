@@ -148,6 +148,24 @@ export function cursorValueForRow(
   return sort === "newest" || sort === "oldest" ? row.created_at : row.price;
 }
 
+// Marketplace 2.1: optional listing-type filter, additive to the M2
+// discovery surface above -- none of the search/category/price/sort/
+// pagination logic above is touched by this. Deliberately excludes an
+// "All" entry as a real value: no `listingType` param at all already
+// means "show every type," matching the same "absent = unfiltered"
+// convention already used by every other M2 filter param.
+export const LISTING_TYPE_FILTER_OPTIONS = [
+  { value: "for_sale", label: "For Sale" },
+  { value: "wanted", label: "Wanted" },
+  { value: "for_hire", label: "For Hire" },
+] as const;
+
+export type ListingTypeFilter = (typeof LISTING_TYPE_FILTER_OPTIONS)[number]["value"];
+
+export function isListingTypeFilter(value: string | undefined): value is ListingTypeFilter {
+  return LISTING_TYPE_FILTER_OPTIONS.some((option) => option.value === value);
+}
+
 export type DiscoveryParams = {
   q?: string;
   category?: string;
@@ -155,6 +173,9 @@ export type DiscoveryParams = {
   maxPrice?: string;
   sort?: string;
   before?: string;
+  // Marketplace 2.1 additions -- both optional, both additive.
+  county?: string;
+  listingType?: string;
 };
 
 // Builds a /marketplace URL carrying exactly the discovery state passed
@@ -173,6 +194,8 @@ export function buildMarketplaceHref(params: DiscoveryParams): string {
   if (params.minPrice) usp.set("minPrice", params.minPrice);
   if (params.maxPrice) usp.set("maxPrice", params.maxPrice);
   if (params.sort && params.sort !== "newest") usp.set("sort", params.sort);
+  if (params.county) usp.set("county", params.county);
+  if (params.listingType) usp.set("listingType", params.listingType);
   if (params.before) usp.set("before", params.before);
   const query = usp.toString();
   return query ? `/marketplace?${query}` : "/marketplace";

@@ -7,6 +7,12 @@ import type { FilledCategoryDetailField } from "@/lib/marketplaceCategoryFields"
 // the exact same card layout already used on the browse/detail pages
 // (rounded-shamba border, same field order) so what a seller previews
 // here looks like what they'll actually see live.
+const LISTING_TYPE_BADGE: Record<string, { label: string; className: string }> = {
+  for_sale: { label: "For Sale", className: "bg-shamba-green" },
+  wanted: { label: "Wanted", className: "bg-shamba-blue" },
+  for_hire: { label: "For Hire", className: "bg-shamba-ochre" },
+};
+
 export function ListingPreview({
   title,
   categoryName,
@@ -16,18 +22,26 @@ export function ListingPreview({
   price,
   priceUnit,
   location,
+  countyName,
+  hireDeposit,
+  hireMinimumPeriod,
   photoUrls,
 }: {
   title: string;
   categoryName: string;
   details: FilledCategoryDetailField[];
   description: string;
-  listingType: "for_sale" | "wanted";
+  listingType: "for_sale" | "wanted" | "for_hire";
   price: string;
   priceUnit: string;
   location: string;
+  countyName?: string;
+  hireDeposit?: string;
+  hireMinimumPeriod?: string;
   photoUrls: string[];
 }) {
+  const isForHire = listingType === "for_hire";
+
   return (
     <div className="flex flex-col gap-3 rounded-shamba border border-shamba-line bg-shamba-card p-4">
       <div className="flex items-start justify-between gap-2">
@@ -35,13 +49,9 @@ export function ListingPreview({
           {title || "Untitled listing"}
         </h3>
         <span
-          className={
-            listingType === "for_sale"
-              ? "shrink-0 rounded-shamba bg-shamba-green px-2 py-1 font-mono text-xs font-semibold text-shamba-card"
-              : "shrink-0 rounded-shamba bg-shamba-blue px-2 py-1 font-mono text-xs font-semibold text-shamba-card"
-          }
+          className={`shrink-0 rounded-shamba ${LISTING_TYPE_BADGE[listingType].className} px-2 py-1 font-mono text-xs font-semibold text-shamba-card`}
         >
-          {listingType === "for_sale" ? "For Sale" : "Wanted"}
+          {LISTING_TYPE_BADGE[listingType].label}
         </span>
       </div>
 
@@ -83,10 +93,22 @@ export function ListingPreview({
         </p>
       )}
 
-      {location && (
+      {/* Hire fields only ever shown for a For Hire listing, and only
+          when actually filled in -- no "N/A", no empty row for a
+          For Sale/Wanted listing (isForHire alone already guards
+          against that; the field-level check handles a For Hire
+          listing that simply left one blank). */}
+      {isForHire && hireDeposit && (
+        <p className="text-sm text-shamba-ink-soft">Deposit: {hireDeposit}</p>
+      )}
+      {isForHire && hireMinimumPeriod && (
+        <p className="text-sm text-shamba-ink-soft">Minimum hire period: {hireMinimumPeriod}</p>
+      )}
+
+      {(countyName || location) && (
         <p className="flex items-center gap-1 text-xs text-shamba-ink-soft">
           <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
-          {location}
+          {[countyName, location].filter(Boolean).join(" · ")}
         </p>
       )}
     </div>

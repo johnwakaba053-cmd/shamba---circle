@@ -25,7 +25,7 @@ const MAX_PHOTOS = 5;
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const ACCEPTED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
-type ListingType = "for_sale" | "wanted";
+type ListingType = "for_sale" | "wanted" | "for_hire";
 
 // Marketplace's own product taxonomy (public.marketplace_categories) --
 // independent of Communities' discussion taxonomy (public.communities).
@@ -34,6 +34,10 @@ type ListingType = "for_sale" | "wanted";
 // category's `name` is later renamed, unlike the old text-only category
 // that silently orphaned when a Community's name changed.
 export type MarketplaceCategoryOption = { id: string; name: string };
+
+// Marketplace 2.1: the existing, already-authoritative public.counties
+// table (id/name) -- never a new/second county list.
+export type MarketplaceCountyOption = { id: string; name: string };
 
 type Status =
   | { kind: "idle" }
@@ -59,12 +63,14 @@ type ViewMode = "form" | "preview";
 // component, just a second render mode (`viewMode`), not a new route.
 export function ListingForm({
   categories,
+  counties,
   mode = "create",
   listingId,
   initialValues,
   initialPhotos = [],
 }: {
   categories: MarketplaceCategoryOption[];
+  counties: MarketplaceCountyOption[];
   mode?: "create" | "edit";
   listingId?: string;
   initialValues?: {
@@ -76,6 +82,9 @@ export function ListingForm({
     priceUnit: string;
     location: string;
     categoryDetails?: CategoryFieldFormValues;
+    countyId?: string;
+    hireDeposit?: string;
+    hireMinimumPeriod?: string;
   };
   initialPhotos?: EditableListingMediaItem[];
 }) {
@@ -96,6 +105,16 @@ export function ListingForm({
   );
   const [price, setPrice] = useState(initialValues?.price ?? "");
   const [priceUnit, setPriceUnit] = useState(initialValues?.priceUnit ?? "");
+  // Hire-specific terms -- only ever meaningful while listingType is
+  // "for_hire"; cleared whenever the seller moves away from it (see
+  // handleListingTypeChange) and forced to null at save time regardless
+  // of stale state (see validateAll/handlePublish), so a For Sale/Wanted
+  // listing can never end up carrying leftover hire data.
+  const [hireDeposit, setHireDeposit] = useState(initialValues?.hireDeposit ?? "");
+  const [hireMinimumPeriod, setHireMinimumPeriod] = useState(
+    initialValues?.hireMinimumPeriod ?? "",
+  );
+  const [countyId, setCountyId] = useState(initialValues?.countyId ?? "");
   const [location, setLocation] = useState(initialValues?.location ?? "");
   // Existing photos already saved on the listing (edit mode only) --
   // removing one here only updates this local state; the actual delete
@@ -180,13 +199,32 @@ export function ListingForm({
     setCategoryDetailsValues((prev) => ({ ...prev, [key]: value }));
   }
 
+  // Moving away from "For Hire" clears both hire fields immediately --
+  // never leaves stale deposit/minimum-period data sitting behind a
+  // For Sale/Wanted listing. Moving into "For Hire" leaves them exactly
+  // as they were (empty for a fresh selection, or whatever an edit's
+  // initialValues carried) so the seller can optionally fill them in.
+  function handleListingTypeChange(value: ListingType) {
+    setListingType(value);
+    if (value !== "for_hire") {
+      setHireDeposit("");
+      setHireMinimumPeriod("");
+    }
+  }
+
   // Shared by both the "continue to preview" gate and (defensively)
   // publish itself -- the single validation pass every field goes
   // through, including category-specific ones via the same
   // marketplaceCategoryFields.ts validator the form's rendering and the
   // detail page's display both already read from.
   function validateAll():
-    | { ok: true; selectedCategoryName: string; parsedCategoryDetails: Record<string, string | number> }
+    | {
+        ok: true;
+        selectedCategoryName: string;
+        parsedCategoryDetails: Record<string, string | number>;
+        parsedHireDeposit: number | null;
+        trimmedHireMinimumPeriod: string;
+      }
     | { ok: false; message: string; categoryErrors: Record<string, string> } {
     const trimmedTitle = title.trim();
     const trimmedDescription = description.trim();
@@ -210,6 +248,36 @@ export function ListingForm({
       }
     }
 
+    // County is optional; if provided it must be one of the options
+    // actually rendered (i.e. a real public.counties row) -- the
+    // <select> itself already only offers real options, this is a
+    // defensive re-check, not a new source of truth.
+    if (countyId && !counties.some((option) => option.id === countyId)) {
+      return { ok: false, message: "Choose a valid county, or leave it blank.", categoryErrors: {} };
+    }
+
+    // Hire fields are only ever meaningful for "for_hire" -- for any
+    // other listing type they're forced blank regardless of what's
+    // still sitting in state (handleListingTypeChange already clears
+    // them reactively, this is the save-time guarantee).
+    let parsedHireDeposit: number | null = null;
+    let trimmedHireMinimumPeriod = "";
+
+    if (listingType === "for_hire") {
+      if (hireDeposit.trim().length > 0) {
+        const value = Number(hireDeposit);
+        if (Number.isNaN(value) || value < 0) {
+          return {
+            ok: false,
+            message: "Enter a valid hire deposit, or leave it blank.",
+            categoryErrors: {},
+          };
+        }
+        parsedHireDeposit = value;
+      }
+      trimmedHireMinimumPeriod = hireMinimumPeriod.trim();
+    }
+
     const { errors: categoryErrors, parsed } = validateCategoryDetails(categoryId, categoryDetailsValues);
     if (categoryErrors.length > 0) {
       const errorMap: Record<string, string> = {};
@@ -217,7 +285,13 @@ export function ListingForm({
       return { ok: false, message: "Please fix the highlighted fields below.", categoryErrors: errorMap };
     }
 
-    return { ok: true, selectedCategoryName: selectedCategory.name, parsedCategoryDetails: parsed };
+    return {
+      ok: true,
+      selectedCategoryName: selectedCategory.name,
+      parsedCategoryDetails: parsed,
+      parsedHireDeposit,
+      trimmedHireMinimumPeriod,
+    };
   }
 
   function handleContinueToPreview(event: React.FormEvent<HTMLFormElement>) {
@@ -289,6 +363,15 @@ export function ListingForm({
         price: parsedPrice,
         price_unit: priceUnit.trim() || null,
         location: location.trim() || null,
+        county_id: countyId || null,
+        // Both explicitly null for any listing_type other than
+        // "for_hire" -- validateAll already guarantees this (it only
+        // ever populates parsedHireDeposit/trimmedHireMinimumPeriod
+        // when listingType === "for_hire"), so this is never dependent
+        // on stale component state.
+        hire_deposit: validation.parsedHireDeposit,
+        hire_minimum_period:
+          validation.trimmedHireMinimumPeriod.length > 0 ? validation.trimmedHireMinimumPeriod : null,
       };
 
       if (mode === "edit") {
@@ -513,6 +596,7 @@ export function ListingForm({
 
   if (viewMode === "preview") {
     const selectedCategory = categories.find((option) => option.id === categoryId);
+    const selectedCounty = counties.find((option) => option.id === countyId);
     const { parsed } = validateCategoryDetails(categoryId, categoryDetailsValues);
     const filledDetails = getFilledCategoryDetailFields(categoryId, parsed);
     const photoUrls = [...existingPhotos.map((photo) => photo.url), ...previewUrls];
@@ -528,6 +612,9 @@ export function ListingForm({
           price={price}
           priceUnit={priceUnit}
           location={location}
+          countyName={selectedCounty?.name ?? ""}
+          hireDeposit={hireDeposit}
+          hireMinimumPeriod={hireMinimumPeriod}
           photoUrls={photoUrls}
         />
 
@@ -647,6 +734,7 @@ export function ListingForm({
             [
               { value: "for_sale", label: "For Sale", description: "I'm offering this" },
               { value: "wanted", label: "Wanted", description: "I'm looking for this" },
+              { value: "for_hire", label: "For Hire", description: "I'm offering this for hire/rental" },
             ] as const
           ).map((option) => (
             <label
@@ -658,7 +746,7 @@ export function ListingForm({
                 name="listing_type"
                 value={option.value}
                 checked={listingType === option.value}
-                onChange={() => setListingType(option.value)}
+                onChange={() => handleListingTypeChange(option.value)}
                 disabled={isLoading}
                 className="size-5 border-shamba-line text-shamba-green focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
               />
@@ -704,9 +792,68 @@ export function ListingForm({
         />
       </div>
 
+      {listingType === "for_hire" && (
+        <div className="flex flex-col gap-4 rounded-shamba border border-shamba-line bg-shamba-card p-4">
+          <p className="font-sans text-sm font-semibold text-shamba-ink">Hire details</p>
+
+          <div className="flex flex-col gap-2">
+            <label htmlFor="hire_deposit" className="font-sans text-sm font-semibold text-shamba-ink">
+              Hire deposit <span className="font-normal text-shamba-ink-soft">(optional)</span>
+            </label>
+            <input
+              id="hire_deposit"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="any"
+              value={hireDeposit}
+              onChange={(event) => setHireDeposit(event.target.value)}
+              disabled={isLoading}
+              placeholder="e.g. 2000"
+              className="rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink placeholder:text-shamba-ink-soft focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <label htmlFor="hire_minimum_period" className="font-sans text-sm font-semibold text-shamba-ink">
+              Minimum hire period <span className="font-normal text-shamba-ink-soft">(optional)</span>
+            </label>
+            <input
+              id="hire_minimum_period"
+              type="text"
+              value={hireMinimumPeriod}
+              onChange={(event) => setHireMinimumPeriod(event.target.value)}
+              disabled={isLoading}
+              placeholder="e.g. 3 days"
+              className="rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink placeholder:text-shamba-ink-soft focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2">
+        <label htmlFor="county" className="font-sans text-sm font-semibold text-shamba-ink">
+          County <span className="font-normal text-shamba-ink-soft">(optional)</span>
+        </label>
+        <select
+          id="county"
+          value={countyId}
+          onChange={(event) => setCountyId(event.target.value)}
+          disabled={isLoading}
+          className="rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
+        >
+          <option value="">Select county (optional)</option>
+          {counties.map((option) => (
+            <option key={option.id} value={option.id}>
+              {option.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="flex flex-col gap-2">
         <label htmlFor="location" className="font-sans text-sm font-semibold text-shamba-ink">
-          Location <span className="font-normal text-shamba-ink-soft">(optional)</span>
+          Location detail <span className="font-normal text-shamba-ink-soft">(optional)</span>
         </label>
         <input
           id="location"
@@ -714,7 +861,7 @@ export function ListingForm({
           value={location}
           onChange={(event) => setLocation(event.target.value)}
           disabled={isLoading}
-          placeholder="e.g. Nakuru"
+          placeholder="e.g. Karen, near JKIA"
           className="rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink placeholder:text-shamba-ink-soft focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
         />
       </div>

@@ -17,13 +17,19 @@ export default async function NewListing() {
   // Communities' discussion taxonomy. Previously this borrowed
   // communities.name directly, which had no referential integrity: a
   // Community rename silently orphaned any listing using the old name.
-  const { data: categoriesData } = await supabase
-    .from("marketplace_categories")
-    .select("id, name")
-    .eq("is_active", true)
-    .order("sort_order", { ascending: true });
+  const [{ data: categoriesData }, { data: countiesData }] = await Promise.all([
+    supabase
+      .from("marketplace_categories")
+      .select("id, name")
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true }),
+    // The existing, authoritative public.counties table (Marketplace
+    // 2.1) -- never a new/second county list.
+    supabase.from("counties").select("id, name").order("name", { ascending: true }),
+  ]);
 
   const categories = categoriesData ?? [];
+  const counties = countiesData ?? [];
 
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
@@ -38,7 +44,7 @@ export default async function NewListing() {
             Share what you&apos;re selling or looking for with other farmers.
           </p>
 
-          <ListingForm categories={categories} />
+          <ListingForm categories={categories} counties={counties} />
         </div>
       </main>
     </div>

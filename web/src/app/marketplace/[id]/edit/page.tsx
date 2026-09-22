@@ -15,10 +15,13 @@ type Listing = {
   category: string;
   category_id: string | null;
   category_details: CategoryDetails | null;
-  listing_type: "for_sale" | "wanted";
+  listing_type: "for_sale" | "wanted" | "for_hire";
   price: number | null;
   price_unit: string | null;
   location: string | null;
+  county_id: string | null;
+  hire_deposit: number | null;
+  hire_minimum_period: string | null;
 };
 
 export default async function EditListing({
@@ -40,7 +43,7 @@ export default async function EditListing({
   const { data: listing } = await supabase
     .from("listings")
     .select(
-      "id, profile_id, title, description, category, category_id, category_details, listing_type, price, price_unit, location",
+      "id, profile_id, title, description, category, category_id, category_details, listing_type, price, price_unit, location, county_id, hire_deposit, hire_minimum_period",
     )
     .eq("id", id)
     .maybeSingle();
@@ -62,16 +65,20 @@ export default async function EditListing({
     redirect(`/marketplace/${typedListing.id}`);
   }
 
-  const [{ data: categoriesData }, existingPhotos] = await Promise.all([
+  const [{ data: categoriesData }, { data: countiesData }, existingPhotos] = await Promise.all([
     supabase
       .from("marketplace_categories")
       .select("id, name")
       .eq("is_active", true)
       .order("sort_order", { ascending: true }),
+    // The existing, authoritative public.counties table (Marketplace
+    // 2.1) -- never a new/second county list.
+    supabase.from("counties").select("id, name").order("name", { ascending: true }),
     fetchEditableListingMedia(supabase, typedListing.id),
   ]);
 
   const categories = categoriesData ?? [];
+  const counties = countiesData ?? [];
 
   // Prefer the stable category_id relationship. Fall back to matching
   // the legacy free-text category against a current category's name --
@@ -110,6 +117,7 @@ export default async function EditListing({
 
             <ListingForm
               categories={categories}
+              counties={counties}
               mode="edit"
               listingId={typedListing.id}
               initialValues={{
@@ -126,6 +134,10 @@ export default async function EditListing({
                 // simply empty, so the form's category-specific inputs
                 // render blank rather than crashing on a missing value.
                 categoryDetails: categoryDetailsToFormValues(typedListing.category_details),
+                countyId: typedListing.county_id ?? "",
+                hireDeposit:
+                  typedListing.hire_deposit !== null ? String(typedListing.hire_deposit) : "",
+                hireMinimumPeriod: typedListing.hire_minimum_period ?? "",
               }}
               initialPhotos={existingPhotos}
             />

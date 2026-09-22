@@ -5,12 +5,15 @@ import { useRouter } from "next/navigation";
 import { Filter, Search, X } from "lucide-react";
 import {
   buildMarketplaceHref,
+  isListingTypeFilter,
   isSortOption,
+  LISTING_TYPE_FILTER_OPTIONS,
   SORT_OPTIONS,
   type SortOption,
 } from "@/lib/marketplaceDiscovery";
 
 type CategoryOption = { id: string; name: string };
+type CountyOption = { id: string; name: string };
 
 // Client-side navigation only -- there is no local result-fetching or
 // state-management library here. Every control updates the URL (via
@@ -22,18 +25,24 @@ type CategoryOption = { id: string; name: string };
 // set -- continuing an old page's cursor into it would be meaningless.
 export function MarketplaceFilters({
   categories,
+  counties,
   initialQuery,
   initialCategory,
   initialMinPrice,
   initialMaxPrice,
   initialSort,
+  initialCounty,
+  initialListingType,
 }: {
   categories: CategoryOption[];
+  counties: CountyOption[];
   initialQuery: string;
   initialCategory: string;
   initialMinPrice: string;
   initialMaxPrice: string;
   initialSort: SortOption;
+  initialCounty: string;
+  initialListingType: string;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialQuery);
@@ -41,18 +50,28 @@ export function MarketplaceFilters({
   const [minPrice, setMinPrice] = useState(initialMinPrice);
   const [maxPrice, setMaxPrice] = useState(initialMaxPrice);
   const [sort, setSort] = useState<SortOption>(initialSort);
+  const [county, setCounty] = useState(initialCounty);
+  const [listingType, setListingType] = useState(initialListingType);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Reflects the URL this page actually rendered from, not the (possibly
   // not-yet-navigated) in-progress control state -- correct for deciding
   // whether "Reset filters" should appear at all.
   const hasAnyActiveFilter = Boolean(
-    initialQuery || initialCategory || initialMinPrice || initialMaxPrice || initialSort !== "newest",
+    initialQuery ||
+      initialCategory ||
+      initialMinPrice ||
+      initialMaxPrice ||
+      initialSort !== "newest" ||
+      initialCounty ||
+      initialListingType,
   );
   const activeFilterBadgeCount =
     (initialCategory ? 1 : 0) +
     (initialMinPrice || initialMaxPrice ? 1 : 0) +
-    (initialSort !== "newest" ? 1 : 0);
+    (initialSort !== "newest" ? 1 : 0) +
+    (initialCounty ? 1 : 0) +
+    (initialListingType ? 1 : 0);
 
   function navigate(overrides: {
     q?: string;
@@ -60,6 +79,8 @@ export function MarketplaceFilters({
     minPrice?: string;
     maxPrice?: string;
     sort?: SortOption;
+    county?: string;
+    listingType?: string;
   }) {
     router.push(
       buildMarketplaceHref({
@@ -68,6 +89,8 @@ export function MarketplaceFilters({
         minPrice: overrides.minPrice ?? minPrice,
         maxPrice: overrides.maxPrice ?? maxPrice,
         sort: overrides.sort ?? sort,
+        county: overrides.county ?? county,
+        listingType: overrides.listingType ?? listingType,
       }),
     );
   }
@@ -92,6 +115,19 @@ export function MarketplaceFilters({
     navigate({ sort: value });
   }
 
+  function handleCountyChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    const value = event.target.value;
+    setCounty(value);
+    navigate({ county: value });
+  }
+
+  function handleListingTypeFilterChange(event: React.ChangeEvent<HTMLSelectElement>) {
+    const value = event.target.value;
+    if (value !== "" && !isListingTypeFilter(value)) return;
+    setListingType(value);
+    navigate({ listingType: value });
+  }
+
   function handlePriceApply(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     navigate({ minPrice, maxPrice });
@@ -103,6 +139,8 @@ export function MarketplaceFilters({
     setMinPrice("");
     setMaxPrice("");
     setSort("newest");
+    setCounty("");
+    setListingType("");
     router.push("/marketplace");
   }
 
@@ -212,6 +250,44 @@ export function MarketplaceFilters({
               {SORT_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5 sm:min-w-[160px]">
+            <label htmlFor="marketplace-listing-type" className="font-sans text-xs font-semibold text-shamba-ink">
+              Listing type
+            </label>
+            <select
+              id="marketplace-listing-type"
+              value={listingType}
+              onChange={handleListingTypeFilterChange}
+              className="min-h-11 rounded-shamba border border-shamba-line bg-shamba-bg px-3 font-sans text-sm text-shamba-ink focus:outline-none focus:ring-2 focus:ring-shamba-green"
+            >
+              <option value="">All</option>
+              {LISTING_TYPE_FILTER_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5 sm:min-w-[180px]">
+            <label htmlFor="marketplace-county" className="font-sans text-xs font-semibold text-shamba-ink">
+              County
+            </label>
+            <select
+              id="marketplace-county"
+              value={county}
+              onChange={handleCountyChange}
+              className="min-h-11 rounded-shamba border border-shamba-line bg-shamba-bg px-3 font-sans text-sm text-shamba-ink focus:outline-none focus:ring-2 focus:ring-shamba-green"
+            >
+              <option value="">All Counties</option>
+              {counties.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
                 </option>
               ))}
             </select>
