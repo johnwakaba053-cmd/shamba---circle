@@ -231,7 +231,7 @@ export default async function Education({
             {livestockTopics.length > 0 && (
               <div>
                 <h2 className="font-display text-lg font-semibold text-shamba-ink">
-                  🐄 Livestock
+                  🐄 Livestock School
                 </h2>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {livestockTopics.map((t) => (
