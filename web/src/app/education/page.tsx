@@ -157,7 +157,10 @@ export default async function Education({
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
         <div>
-          <h1 className="font-display text-3xl font-bold leading-tight tracking-tight text-shamba-ink">
+          <p className="font-mono text-xs font-semibold uppercase tracking-wide text-shamba-green">
+            Shamba Space Academy
+          </p>
+          <h1 className="mt-1 font-display text-3xl font-bold leading-tight tracking-tight text-shamba-ink">
             Education &amp; Resources
           </h1>
           <p className="mt-2 max-w-2xl text-base leading-6 text-shamba-ink-soft">
@@ -203,7 +206,7 @@ export default async function Education({
             {cropTopics.length > 0 && (
               <div>
                 <h2 className="font-display text-lg font-semibold text-shamba-ink">
-                  🌱 Crops
+                  🌱 Crop School
                 </h2>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {cropTopics.map((t) => (
