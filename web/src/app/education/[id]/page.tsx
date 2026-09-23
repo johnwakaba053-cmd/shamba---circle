@@ -8,6 +8,10 @@ import {
   EDUCATION_CATEGORY_FALLBACK_ICON,
   LEARNING_CATEGORY_LABELS,
   RESOURCE_TYPE_LABELS,
+  formatVideoDuration,
+  getYouTubeVideoId,
+  getYouTubeEmbedUrl,
+  getYouTubeWatchUrl,
   type LearningCategory,
   type ResourceType,
   type ResourceOrigin,
@@ -28,6 +32,11 @@ type EducationResourceDetail = {
   source_name: string | null;
   source_url: string | null;
   published_at: string;
+  // Watch & Learn -- populated only for resource_type = "video".
+  youtube_url: string | null;
+  duration_seconds: number | null;
+  video_published_at: string | null;
+  language: string | null;
   education_categories: { name: string } | null;
   education_topics: { name: string; emoji: string | null } | null;
   education_sources: { name: string; url: string | null } | null;
@@ -62,7 +71,7 @@ export default async function EducationResource({
   const { data, error } = await supabase
     .from("education_resources")
     .select(
-      "id, category_id, topic_id, learning_category, resource_type, origin, external_url, storage_path, title, summary, content, source_name, source_url, published_at, education_categories(name), education_topics(name, emoji), education_sources(name, url)",
+      "id, category_id, topic_id, learning_category, resource_type, origin, external_url, storage_path, title, summary, content, source_name, source_url, published_at, youtube_url, duration_seconds, video_published_at, language, education_categories(name), education_topics(name, emoji), education_sources(name, url)",
     )
     .eq("id", id)
     .eq("is_published", true)
@@ -75,6 +84,20 @@ export default async function EducationResource({
   }
 
   const paragraphs = resource?.content.split("\n\n") ?? [];
+
+  // Only ever passed to an <iframe src> or <a href> after this validation
+  // -- getYouTubeVideoId rejects any non-YouTube domain, non-https scheme
+  // (javascript:, data:, ...), or malformed URL, regardless of what's
+  // stored in youtube_url. A null result here means "Video unavailable",
+  // never a broken/omitted iframe rendered with the raw string.
+  const videoId =
+    resource?.resource_type === "video"
+      ? getYouTubeVideoId(resource.youtube_url)
+      : null;
+  const videoDuration =
+    resource?.resource_type === "video"
+      ? formatVideoDuration(resource.duration_seconds)
+      : null;
 
   // Related resources prefer the same topic (when this resource has one)
   // over the existing category relationship, but only ever fall back to
@@ -155,6 +178,11 @@ export default async function EducationResource({
                   {LEARNING_CATEGORY_LABELS[resource.learning_category]}
                 </span>
               )}
+              {resource.resource_type === "video" && resource.language && (
+                <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
+                  {resource.language}
+                </span>
+              )}
             </div>
 
             {resource.education_categories && (
@@ -178,6 +206,49 @@ export default async function EducationResource({
             <p className="mt-2 font-mono text-xs text-shamba-ink-soft">
               Published {new Date(resource.published_at).toLocaleDateString()}
             </p>
+
+            {resource.resource_type === "video" &&
+              (videoDuration || resource.video_published_at) && (
+                <p className="mt-1 font-mono text-xs text-shamba-ink-soft">
+                  {videoDuration && <>Duration: {videoDuration}</>}
+                  {videoDuration && resource.video_published_at && " · "}
+                  {resource.video_published_at && (
+                    <>
+                      Published on YouTube{" "}
+                      {new Date(resource.video_published_at).toLocaleDateString()}
+                    </>
+                  )}
+                </p>
+              )}
+
+            {resource.resource_type === "video" && (
+              <div className="mt-4">
+                {videoId ? (
+                  <div className="relative aspect-video w-full overflow-hidden rounded-shamba border border-shamba-line bg-black">
+                    <iframe
+                      src={getYouTubeEmbedUrl(videoId)}
+                      title={`YouTube video player — ${resource.title}`}
+                      className="absolute inset-0 h-full w-full"
+                      loading="lazy"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowFullScreen
+                    />
+                  </div>
+                ) : (
+                  // No usable video ID -- youtube_url is missing or failed
+                  // validation. Never render an iframe pointed at an
+                  // unvalidated string; show a plain, honest fallback
+                  // instead. There is deliberately no external link here,
+                  // since we were never able to confirm this is a genuine
+                  // YouTube URL in the first place.
+                  <div className="flex aspect-video w-full items-center justify-center rounded-shamba border border-dashed border-shamba-line bg-shamba-bg">
+                    <p className="px-4 text-center text-sm font-semibold text-shamba-ink-soft">
+                      Video unavailable
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="mt-6 flex flex-col gap-4 border-t border-shamba-line pt-6">
               {/* A "## " prefix marks a section heading -- a plain
@@ -205,6 +276,20 @@ export default async function EducationResource({
               )}
             </div>
 
+            {resource.resource_type === "video" && videoId && (
+              // Reconstructed from the already-validated video ID, never
+              // from the raw stored youtube_url -- see getYouTubeVideoId.
+              <a
+                href={getYouTubeWatchUrl(videoId)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 inline-flex items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg"
+              >
+                Watch on YouTube
+                <ExternalLink className="size-4" aria-hidden="true" />
+              </a>
+            )}
+
             {/* Shown whenever there's an external URL and nothing has
                 actually been re-hosted in our own Storage yet (storage_path
                 is null) -- true for every resource today, regardless of
@@ -215,19 +300,21 @@ export default async function EducationResource({
                 this condition naturally stops applying to it and a future
                 "Read Online"/"Download" action (gated by
                 canShowDownloadAction) can take over instead. */}
-            {resource.external_url && !resource.storage_path && (
-              <a
-                href={resource.external_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-6 inline-flex items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg"
-              >
-                {resource.education_sources?.name
-                  ? `Read on ${resource.education_sources.name}`
-                  : "View Resource"}
-                <ExternalLink className="size-4" aria-hidden="true" />
-              </a>
-            )}
+            {resource.resource_type !== "video" &&
+              resource.external_url &&
+              !resource.storage_path && (
+                <a
+                  href={resource.external_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-6 inline-flex items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg"
+                >
+                  {resource.education_sources?.name
+                    ? `Read on ${resource.education_sources.name}`
+                    : "View Resource"}
+                  <ExternalLink className="size-4" aria-hidden="true" />
+                </a>
+              )}
 
             {(resource.source_name || resource.source_url) && (
               <p className="mt-6 border-t border-shamba-line pt-4 text-sm text-shamba-ink-soft">

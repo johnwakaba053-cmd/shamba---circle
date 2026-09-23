@@ -1,11 +1,8 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import {
-  EDUCATION_CATEGORY_ICON,
-  EDUCATION_CATEGORY_FALLBACK_ICON,
   LEARNING_CATEGORIES,
   LEARNING_CATEGORY_LABELS,
   RESOURCE_TYPES,
@@ -13,10 +10,8 @@ import {
   isLearningCategory,
   isResourceType,
   buildEducationHref,
-  type LearningCategory,
-  type ResourceType,
-  type ResourceOrigin,
 } from "@/lib/education";
+import { ResourceCard, type EducationResourceCardData } from "./ResourceCard";
 
 type EducationCategory = {
   id: string;
@@ -32,17 +27,11 @@ type EducationTopic = {
   emoji: string | null;
 };
 
-type EducationResourceListItem = {
-  id: string;
-  category_id: string;
-  topic_id: string | null;
-  learning_category: LearningCategory | null;
-  resource_type: ResourceType;
-  origin: ResourceOrigin | null;
-  title: string;
-  summary: string;
-  source_name: string | null;
-  education_sources: { name: string } | null;
+// The Learning Library grid and the Watch & Learn section both fetch this
+// same shape -- see ResourceCard.tsx, which is the single source of truth
+// for what a card needs. published_at is only used for sort order here,
+// not by the card itself.
+type EducationResourceListItem = EducationResourceCardData & {
   published_at: string;
 };
 
@@ -67,6 +56,7 @@ export default async function Education({
     { data: topics, error: topicsError },
     { data: cropPreferences },
     { data: livestockPreferences },
+    { data: watchAndLearnVideos },
   ] = await Promise.all([
     supabase.from("education_categories").select("id, name").order("name"),
     // Topics are keyed off the existing canonical crop_types/livestock_types
@@ -80,6 +70,19 @@ export default async function Education({
       .order("sort_order", { ascending: true }),
     supabase.from("farmer_crop_preferences").select("crop_type_id"),
     supabase.from("farmer_livestock_preferences").select("livestock_type_id"),
+    // Watch & Learn is a fixed "featured" selection, independent of
+    // whatever category/topic/learning/type filter the Learning Library
+    // grid below is currently applying -- so it's its own query, not a
+    // slice of resourcesQuery's results.
+    supabase
+      .from("education_resources")
+      .select(
+        "id, category_id, topic_id, learning_category, resource_type, origin, title, summary, source_name, education_sources(name), thumbnail_url, duration_seconds",
+      )
+      .eq("is_published", true)
+      .eq("resource_type", "video")
+      .order("published_at", { ascending: false })
+      .limit(6),
   ]);
 
   // Only trust filter values that match something real -- an unrecognised
@@ -102,7 +105,7 @@ export default async function Education({
   let resourcesQuery = supabase
     .from("education_resources")
     .select(
-      "id, category_id, topic_id, learning_category, resource_type, origin, title, summary, source_name, education_sources(name), published_at",
+      "id, category_id, topic_id, learning_category, resource_type, origin, title, summary, source_name, education_sources(name), thumbnail_url, duration_seconds, published_at",
     )
     .eq("is_published", true)
     .order("published_at", { ascending: false });
@@ -265,6 +268,53 @@ export default async function Education({
         )}
 
         {!hasError && (
+          <section>
+            <h2 className="font-display text-lg font-semibold text-shamba-ink">
+              📺 Watch & Learn
+            </h2>
+            <p className="mt-1 text-sm text-shamba-ink-soft">
+              Learn farming through carefully selected agricultural videos.
+            </p>
+
+            {watchAndLearnVideos && watchAndLearnVideos.length > 0 ? (
+              <>
+                <div className="mt-3 grid w-full grid-cols-2 gap-3 lg:grid-cols-3">
+                  {(watchAndLearnVideos as unknown as EducationResourceCardData[]).map(
+                    (video) => (
+                      <ResourceCard
+                        key={video.id}
+                        resource={video}
+                        topic={video.topic_id ? topicsById.get(video.topic_id) : undefined}
+                      />
+                    ),
+                  )}
+                </div>
+                <Link
+                  href={buildEducationHref({}, { type: "video" })}
+                  className="mt-3 inline-flex w-fit items-center font-sans text-xs font-semibold text-shamba-ink-soft underline transition-colors hover:text-shamba-ink"
+                >
+                  See all videos
+                </Link>
+              </>
+            ) : (
+              // Zero video resources exist yet -- an explicit empty state
+              // rather than an absent or blank-looking section, so the
+              // Academy still reads as complete while Watch & Learn's
+              // first batch of videos is still being curated.
+              <div className="mt-3 rounded-shamba border border-dashed border-shamba-line bg-shamba-card p-6 text-center">
+                <p className="font-display text-sm font-semibold text-shamba-ink">
+                  Watch &amp; Learn is coming soon.
+                </p>
+                <p className="mt-1 text-sm text-shamba-ink-soft">
+                  We&apos;re preparing a carefully selected collection of
+                  agricultural videos from trusted sources.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
+
+        {!hasError && (
           <div className="flex flex-col gap-3">
             {/* Learning Library: the same resource grid below, framed as a
                 distinct, filterable surface (topic/learning-category
@@ -383,87 +433,13 @@ export default async function Education({
 
         {!hasError && resources && resources.length > 0 && (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            {(resources as unknown as EducationResourceListItem[]).map((resource) => {
-              const Icon =
-                EDUCATION_CATEGORY_ICON[resource.category_id] ??
-                EDUCATION_CATEGORY_FALLBACK_ICON;
-              const resourceTopic = resource.topic_id
-                ? topicsById.get(resource.topic_id)
-                : undefined;
-
-              return (
-                // A plain <article>, not a <Link> -- the title link and the
-                // "Read Resource" action below both point to the same detail
-                // route as separate, sibling interactive elements, so the
-                // card never nests one link inside another (invalid HTML)
-                // while still giving the whole card exactly one destination.
-                <article
-                  key={resource.id}
-                  className="flex flex-col gap-2 rounded-shamba border border-shamba-line bg-shamba-card p-4"
-                >
-                  {/* Shown only for origin = shamba_original -- distinct
-                      green fill (not the neutral bg-shamba-bg used for the
-                      type/topic/learning badges below) so a farmer can tell
-                      at a glance this is Shamba Space's own written guide,
-                      not an external link. */}
-                  {resource.origin === "shamba_original" && (
-                    <span className="w-fit rounded-shamba bg-shamba-green px-2 py-0.5 font-mono text-xs font-semibold text-shamba-card">
-                      Shamba Space Original
-                    </span>
-                  )}
-
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
-                      {RESOURCE_TYPE_LABELS[resource.resource_type]}
-                    </span>
-                    {resourceTopic && (
-                      <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
-                        {resourceTopic.emoji ? `${resourceTopic.emoji} ` : ""}
-                        {resourceTopic.name}
-                      </span>
-                    )}
-                    {resource.learning_category && (
-                      <span className="rounded-shamba bg-shamba-bg px-2 py-0.5 font-mono text-xs font-semibold text-shamba-ink-soft">
-                        {LEARNING_CATEGORY_LABELS[resource.learning_category]}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <Icon
-                      className="size-5 shrink-0 text-shamba-green"
-                      aria-hidden="true"
-                    />
-                    <h2 className="font-display text-base font-semibold leading-tight text-shamba-ink">
-                      <Link
-                        href={`/education/${resource.id}`}
-                        className="transition-colors hover:text-shamba-green hover:underline"
-                      >
-                        {resource.title}
-                      </Link>
-                    </h2>
-                  </div>
-
-                  <p className="text-sm leading-6 text-shamba-ink-soft">
-                    {resource.summary}
-                  </p>
-
-                  {(resource.education_sources?.name || resource.source_name) && (
-                    <p className="font-mono text-xs text-shamba-ink-soft">
-                      Source: {resource.education_sources?.name ?? resource.source_name}
-                    </p>
-                  )}
-
-                  <Link
-                    href={`/education/${resource.id}`}
-                    className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-shamba border border-shamba-line px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink transition-colors hover:border-shamba-green hover:text-shamba-green"
-                  >
-                    Read Resource
-                    <ArrowRight className="size-3.5" aria-hidden="true" />
-                  </Link>
-                </article>
-              );
-            })}
+            {(resources as unknown as EducationResourceListItem[]).map((resource) => (
+              <ResourceCard
+                key={resource.id}
+                resource={resource}
+                topic={resource.topic_id ? topicsById.get(resource.topic_id) : undefined}
+              />
+            ))}
           </div>
         )}
       </main>
