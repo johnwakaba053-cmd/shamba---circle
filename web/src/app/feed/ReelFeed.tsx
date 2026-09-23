@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArrowDown } from "lucide-react";
 import type { Reel } from "./types";
@@ -22,6 +23,7 @@ export function ReelFeed({
   reels,
   nextCursor,
   header,
+  initialIndex = 0,
 }: {
   reels: Reel[];
   nextCursor: string | null;
@@ -33,11 +35,30 @@ export function ReelFeed({
   // existing scroll-snap class, the onScroll wiring, and how reels/
   // nextCursor render are all unchanged below.
   header?: React.ReactNode;
+  // Jumps to this reel on mount, no animation -- the same convention
+  // MediaViewer.tsx already uses for its own initialIndex (scrollLeft =
+  // index * clientWidth), just on the vertical axis. Added for
+  // ProfilePostViewer, which opens already scrolled to the tapped grid
+  // tile instead of always the top; Feed's own page-level usage never
+  // passes this, so it defaults to 0 and behaves exactly as before.
+  // Assumes no `header` is rendered ahead of the reels (true for
+  // ProfilePostViewer); Feed's own header-bearing usage never combines
+  // this prop with a non-zero index, so that's not a real constraint yet.
+  initialIndex?: number;
 }) {
   const { reportScrollTop } = useFeedHeaderVisibility();
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || initialIndex <= 0) return;
+    el.scrollTop = initialIndex * el.clientHeight;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div
+      ref={scrollRef}
       onScroll={(event) => reportScrollTop(event.currentTarget.scrollTop)}
       className="h-full snap-y snap-mandatory overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:bg-shamba-bg"
     >

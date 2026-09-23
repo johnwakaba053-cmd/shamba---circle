@@ -5,6 +5,8 @@ import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { ProfileFollowControl } from "./ProfileFollowControl";
 import { ROLE_LABELS } from "@/lib/roles";
+import { ProfilePostGrid } from "../ProfilePostGrid";
+import { fetchProfileReels } from "../profilePosts";
 
 type PublicProfileRow = {
   profile_id: string;
@@ -82,11 +84,19 @@ export default async function PublicProfile({
     }
   }
 
+  // Posts only ever load for a profile this viewer can already see --
+  // same isVisible boundary as everything else above. Uses the same
+  // sanctioned get_profile_posts() RPC path as the owner's own page
+  // (see profilePosts.ts); a private profile's posts are never fetched
+  // for any other viewer, and get_public_profile()'s own public-OR-owner
+  // identity gate above is left completely untouched.
+  const reels = isVisible ? await fetchProfileReels(supabase, id, user.id) : [];
+
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
       <AppHeader />
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center gap-6 px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
         <div className="w-full max-w-sm rounded-shamba border border-shamba-line bg-shamba-card p-6 sm:p-8">
           {error && (
             <p role="alert" className="text-sm font-semibold text-shamba-rust">
@@ -154,6 +164,12 @@ export default async function PublicProfile({
             </>
           )}
         </div>
+
+        {!error && profile && isVisible && (
+          <div className="w-full max-w-2xl">
+            <ProfilePostGrid reels={reels} emptyMessage="Nothing shared here yet." />
+          </div>
+        )}
       </main>
     </div>
   );

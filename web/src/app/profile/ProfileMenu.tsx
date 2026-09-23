@@ -2,42 +2,47 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MoreVertical } from "lucide-react";
+import type { SettingsSectionId } from "./settingsSections";
 
 // The three-dot menu is pure navigation/disclosure -- it holds no
-// preference logic of its own. Every item either (a) jumps to, and
-// expands, an existing <details> settings section further down this same
-// page (see profile/page.tsx), or (b) for the two photo items, is a plain
-// <button role="menuitem"> that programmatically clicks a hidden element
-// already rendered by AvatarUploadControl -- the hidden file input for
-// "Change", the hidden remove-trigger button for "Remove". A <label> was
-// used for "Change" originally, but a <label> isn't reliably keyboard-
-// focusable/operable as a menu item across browsers, so both photo items
-// now use the same button+programmatic-click pattern. Neither photo item
-// holds any upload/remove logic of its own; both act on the one avatar
-// state AvatarUploadControl already owns. The actual saving logic for
-// every other item lives entirely in the existing DisplayNameControl/
-// ProfileVisibilityControl/CountyControl/PreferenceMultiSelectControl/
-// AlertPreferencesControl/BioControl components rendered inside those
-// sections -- nothing here duplicates it.
-type MenuLink = { label: string; sectionId: string };
+// preference logic of its own. Every non-photo item calls back into
+// ProfileSettingsHost (the sole owner of "which one settings panel is
+// currently open"), which shows the matching existing control -- never a
+// DOM id/hash jump, since the seven settings sections no longer live
+// inline on the page as always-visible <details>. The two photo items
+// are a plain <button role="menuitem"> that programmatically clicks a
+// hidden element already rendered by AvatarUploadControl -- the hidden
+// file input for "Change", the hidden remove-trigger button for
+// "Remove" -- so neither duplicates any upload/remove logic or avatar
+// state. The actual saving logic for every other item lives entirely in
+// the existing DisplayNameControl/ProfileVisibilityControl/CountyControl/
+// PreferenceMultiSelectControl/AlertPreferencesControl/BioControl
+// components rendered by ProfileSettingsHost -- nothing here duplicates it.
+type MenuLink = { label: string; sectionId: SettingsSectionId };
 
 const PROFILE_LINKS: MenuLink[] = [
-  { label: "Change display name", sectionId: "settings-display-name" },
-  { label: "Edit bio", sectionId: "settings-bio" },
+  { label: "Edit display name", sectionId: "display-name" },
+  { label: "Edit bio", sectionId: "bio" },
 ];
 
 const FARMER_LINKS: MenuLink[] = [
-  { label: "Farmer preferences", sectionId: "settings-county" },
-  { label: "Weather notifications", sectionId: "settings-alerts" },
-  { label: "Crops & crop alerts", sectionId: "settings-crops" },
-  { label: "Livestock & other alerts", sectionId: "settings-livestock" },
+  { label: "Farmer preferences / Location", sectionId: "county" },
+  { label: "Crops & crop alerts", sectionId: "crops" },
+  { label: "Livestock & other alerts", sectionId: "livestock" },
+  { label: "Weather & alert notifications", sectionId: "alerts" },
 ];
 
-export function ProfileMenu({ isPublic }: { isPublic: boolean }) {
+export function ProfileMenu({
+  isPublic,
+  onSelectSection,
+}: {
+  isPublic: boolean;
+  onSelectSection: (sectionId: SettingsSectionId) => void;
+}) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const firstItemRef = useRef<HTMLAnchorElement>(null);
+  const firstItemRef = useRef<HTMLButtonElement>(null);
 
   // Click outside closes the menu -- checked against the whole
   // trigger+panel container, so clicking the three-dot button itself to
@@ -69,11 +74,8 @@ export function ProfileMenu({ isPublic }: { isPublic: boolean }) {
     }
   }
 
-  function openSection(sectionId: string) {
-    const section = document.getElementById(sectionId);
-    if (section instanceof HTMLDetailsElement) {
-      section.open = true;
-    }
+  function selectSection(sectionId: SettingsSectionId) {
+    onSelectSection(sectionId);
     setOpen(false);
   }
 
@@ -125,19 +127,8 @@ export function ProfileMenu({ isPublic }: { isPublic: boolean }) {
           <p className="px-3 pt-1.5 pb-1 font-mono text-xs font-semibold uppercase tracking-wide text-shamba-ink-soft">
             Profile
           </p>
-          <a
-            ref={firstItemRef}
-            role="menuitem"
-            href={`#${PROFILE_LINKS[0].sectionId}`}
-            onClick={() => openSection(PROFILE_LINKS[0].sectionId)}
-            className="block rounded-shamba px-3 py-2 font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green"
-          >
-            {PROFILE_LINKS[0].label}
-          </a>
-          {/* Opens the native file picker directly via the avatar
-              control's own hidden input -- no section to expand, no
-              duplicate upload logic. */}
           <button
+            ref={firstItemRef}
             type="button"
             role="menuitem"
             onClick={handleChangePhoto}
@@ -153,16 +144,16 @@ export function ProfileMenu({ isPublic }: { isPublic: boolean }) {
           >
             Remove profile photo
           </button>
-          {PROFILE_LINKS.slice(1).map((link) => (
-            <a
+          {PROFILE_LINKS.map((link) => (
+            <button
               key={link.sectionId}
+              type="button"
               role="menuitem"
-              href={`#${link.sectionId}`}
-              onClick={() => openSection(link.sectionId)}
-              className="block rounded-shamba px-3 py-2 font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green"
+              onClick={() => selectSection(link.sectionId)}
+              className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green"
             >
               {link.label}
-            </a>
+            </button>
           ))}
 
           <div className="my-1.5 border-t border-shamba-line" />
@@ -170,17 +161,17 @@ export function ProfileMenu({ isPublic }: { isPublic: boolean }) {
           <p className="px-3 pt-1.5 pb-1 font-mono text-xs font-semibold uppercase tracking-wide text-shamba-ink-soft">
             Privacy
           </p>
-          <a
+          <button
+            type="button"
             role="menuitem"
-            href="#settings-visibility"
-            onClick={() => openSection("settings-visibility")}
-            className="block rounded-shamba px-3 py-2 font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green"
+            onClick={() => selectSection("visibility")}
+            className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green"
           >
             <span className="block">Public / Private account</span>
             <span className="block font-mono text-xs text-shamba-ink-soft">
               Currently: {isPublic ? "Public account" : "Private account"}
             </span>
-          </a>
+          </button>
 
           <div className="my-1.5 border-t border-shamba-line" />
 
@@ -188,15 +179,15 @@ export function ProfileMenu({ isPublic }: { isPublic: boolean }) {
             Farmer settings
           </p>
           {FARMER_LINKS.map((link) => (
-            <a
+            <button
               key={link.sectionId}
+              type="button"
               role="menuitem"
-              href={`#${link.sectionId}`}
-              onClick={() => openSection(link.sectionId)}
-              className="block rounded-shamba px-3 py-2 font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green"
+              onClick={() => selectSection(link.sectionId)}
+              className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green"
             >
               {link.label}
-            </a>
+            </button>
           ))}
         </div>
       )}
