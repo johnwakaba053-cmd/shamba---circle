@@ -4,12 +4,7 @@ import { Lock, UserRound } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { ProfileFollowControl } from "./ProfileFollowControl";
-
-const ROLE_LABELS: Record<string, string> = {
-  farmer: "Farmer",
-  buyer: "Buyer",
-  seller: "Seller",
-};
+import { ROLE_LABELS } from "@/lib/roles";
 
 type PublicProfileRow = {
   profile_id: string;
