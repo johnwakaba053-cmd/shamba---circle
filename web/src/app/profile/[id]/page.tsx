@@ -4,6 +4,7 @@ import { Lock, UserRound } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { ProfileFollowControl } from "./ProfileFollowControl";
+import { MessageActionButton } from "@/components/MessageActionButton";
 import { ROLE_LABELS } from "@/lib/roles";
 import { ProfilePostGrid } from "../ProfilePostGrid";
 import { fetchProfileReels } from "../profilePosts";
@@ -148,8 +149,9 @@ export default async function PublicProfile({
               )}
 
               {!isOwnProfile && (
-                <div className="mt-4">
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
                   <ProfileFollowControl profileId={id} initialFollowing={isFollowing} />
+                  <MessageActionButton profileId={id} />
                 </div>
               )}
 

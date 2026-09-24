@@ -1,5 +1,15 @@
 import Link from "next/link";
-import { Bell, BookOpen, Rss, Sprout, Store, TrendingUp, UserRound, Users } from "lucide-react";
+import {
+  Bell,
+  BookOpen,
+  MessageCircle,
+  Rss,
+  Sprout,
+  Store,
+  TrendingUp,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { NotificationBell } from "./NotificationBell";
 import { SignOutButton } from "./SignOutButton";
 
@@ -65,6 +75,14 @@ export function AppHeader() {
         >
           <Bell className="size-4" aria-hidden="true" />
           Alerts
+        </Link>
+
+        <Link
+          href="/messages"
+          className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+        >
+          <MessageCircle className="size-4" aria-hidden="true" />
+          Messages
         </Link>
 
         <Link
