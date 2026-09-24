@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell } from "lucide-react";
+import { Inbox } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { fetchMyUnreadNotificationCount } from "@/lib/notifications";
 
@@ -8,13 +8,15 @@ const MAX_DISPLAYED_COUNT = 99;
 // A self-contained async Server Component, not a prop AppHeader has to
 // thread through -- AppHeader itself stays a plain, non-async component,
 // and any page that already renders AppHeader gets the bell for free.
-// The existing "Alerts" text nav-link (also a Bell icon, pointing to
-// /alerts) is untouched: that is the specific weather/pest/market-price
-// system, a deliberately separate concept from this generic
-// notification center, per the Phase 1 architecture decision to keep
-// the two systems independent. This is rendered as a compact icon-only
-// button instead of another text nav item specifically so the two don't
-// read as duplicates of each other.
+// The existing "Alerts" text nav-link (Bell icon, pointing to /alerts)
+// is untouched: that is the specific weather/pest/market-price system, a
+// deliberately separate concept from this generic notification center,
+// per the Phase 1 architecture decision to keep the two systems
+// independent. Uses Inbox rather than Bell specifically so the two
+// header icons never look like duplicates of each other -- Inbox reads
+// as "everything that's happened" (the generic activity center this
+// actually is), distinct from Alerts' own Bell, which stays the
+// recognizable icon for that specific weather/pest/market-price system.
 export async function NotificationBell() {
   const supabase = await createClient();
   const {
@@ -40,7 +42,7 @@ export async function NotificationBell() {
       aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
       className="relative inline-flex size-9 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-bg hover:text-shamba-ink focus:outline-none focus:ring-2 focus:ring-shamba-green"
     >
-      <Bell className="size-5" aria-hidden="true" />
+      <Inbox className="size-5" aria-hidden="true" />
       {unreadCount > 0 && (
         <span
           aria-hidden="true"
