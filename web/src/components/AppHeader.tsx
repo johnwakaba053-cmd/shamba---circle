@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Bell, BookOpen, Rss, Sprout, Store, TrendingUp, UserRound, Users } from "lucide-react";
+import { NotificationBell } from "./NotificationBell";
 import { SignOutButton } from "./SignOutButton";
 
 // Shared across every authenticated page. Communities' original inline
@@ -74,6 +75,7 @@ export function AppHeader() {
           Profile
         </Link>
 
+        <NotificationBell />
         <SignOutButton />
       </div>
     </header>
