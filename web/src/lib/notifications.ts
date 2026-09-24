@@ -11,7 +11,8 @@ export type NotificationType =
   | "post_reaction"
   | "mention"
   | "marketplace"
-  | "education";
+  | "education"
+  | "private_message";
 
 export type NotificationEntityType =
   | "alert"
@@ -19,7 +20,8 @@ export type NotificationEntityType =
   | "post"
   | "post_comment"
   | "listing"
-  | "education_resource";
+  | "education_resource"
+  | "conversation";
 
 export type NotificationRow = {
   id: string;
@@ -89,6 +91,11 @@ export function getNotificationHref(
       return notification.entity_id ? `/marketplace/${notification.entity_id}` : null;
     case "education_resource":
       return notification.entity_id ? `/education/${notification.entity_id}` : null;
+    case "conversation":
+      // /messages/[conversationId] already re-validates participant
+      // access itself on every load (via get_my_conversations()) --
+      // this link is never the security boundary, just a destination.
+      return notification.entity_id ? `/messages/${notification.entity_id}` : null;
     default:
       return null;
   }

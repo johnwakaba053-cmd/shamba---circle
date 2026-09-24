@@ -22,6 +22,11 @@ import { getNotificationHref, type NotificationRow, type NotificationType } from
 // Store/BookOpen for marketplace/education (AppHeader's own nav icons).
 // AtSign for mentions has no prior icon in this app, so this is the one
 // new choice -- the standard, unambiguous symbol for the concept.
+// private_message reuses MessageCircle too, matching the icon this app
+// already established for private messaging specifically (AppHeader's
+// "Messages" nav link, MessageActionButton) -- the same glyph already
+// doing double duty for post_comment here is an accepted, pre-existing
+// overlap, not something this change introduces or resolves.
 const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   alert: Bell,
   new_follower: UserPlus,
@@ -30,6 +35,7 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   mention: AtSign,
   marketplace: Store,
   education: BookOpen,
+  private_message: MessageCircle,
 };
 
 const TYPE_LABELS: Record<NotificationType, string> = {
@@ -40,6 +46,7 @@ const TYPE_LABELS: Record<NotificationType, string> = {
   mention: "Mention",
   marketplace: "Marketplace",
   education: "Education",
+  private_message: "Message",
 };
 
 function formatNotificationTime(iso: string): string {
