@@ -89,7 +89,7 @@ function slug(value: string): string {
 // county queried, same event, same effective/expires window) always
 // produces the same external_ref, so re-running ingestion upserts the
 // existing alerts row instead of inserting a duplicate -- alerts.
-// external_ref already has a partial unique index (Stage 1). WeatherAPI's
+// external_ref has a unique constraint (NULLs still allowed). WeatherAPI's
 // Alerts API does not expose a stable per-alert id (see docs), so this
 // is built from the fields that actually identify a distinct event.
 export function buildExternalRef(countyId: string, alert: WeatherApiAlert): string {

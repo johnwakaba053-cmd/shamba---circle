@@ -97,7 +97,7 @@ export async function ingestWeatherAlerts(
       result.alertsQualified += 1;
       result.countyBreakdown[countyId].qualified += 1;
 
-      // Upsert on external_ref (Stage 1's partial unique index) so
+      // Upsert on external_ref (alerts_external_ref_key unique constraint) so
       // re-running ingestion updates an already-seen alert (e.g. a
       // revised expiry) instead of inserting a duplicate row.
       const { data: upserted, error: upsertError } = await supabase

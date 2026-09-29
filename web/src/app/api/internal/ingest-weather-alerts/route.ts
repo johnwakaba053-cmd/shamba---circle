@@ -67,6 +67,18 @@ async function handleIngestRequest(request: Request) {
 
   const result = await ingestWeatherAlerts(countyIds);
 
+  // Summary counts only, so each run (including Vercel Cron's, whose
+  // response body isn't kept) leaves a record in the runtime logs.
+  // Deliberately never the error strings, alert contents or county
+  // breakdown -- just numbers.
+  console.info("[weather-ingest] run summary", {
+    countiesProcessed: result.countiesProcessed,
+    countiesFailed: result.countiesFailed,
+    providerAlertsSeen: result.providerAlertsSeen,
+    alertsQualified: result.alertsQualified,
+    errors: result.errors.length,
+  });
+
   return NextResponse.json(result);
 }
 
