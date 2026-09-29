@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f3eedc" />
+    <title>You're offline · Shamba Space</title>
+    <style>
+      :root {
+        --shamba-bg: #f3eedc;
+        --shamba-card: #fffcf3;
+        --shamba-ink: #26311f;
+        --shamba-ink-soft: #5c6650;
+        --shamba-green: #3f6b3b;
+        --shamba-green-deep: #2a4a28;
+        --shamba-line: #dcd3b8;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 16px;
+        background: var(--shamba-bg);
+        color: var(--shamba-ink);
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      }
+      .card {
+        width: 100%;
+        max-width: 360px;
+        padding: 28px 24px;
+        border: 1px solid var(--shamba-line);
+        border-radius: 14px;
+        background: var(--shamba-card);
+        text-align: center;
+      }
+      img { width: 64px; height: 64px; border-radius: 14px; }
+      h1 { margin: 16px 0 8px; font-size: 22px; }
+      p { margin: 0; line-height: 1.5; color: var(--shamba-ink-soft); }
+      button {
+        margin-top: 20px;
+        width: 100%;
+        padding: 12px 20px;
+        border: 0;
+        border-radius: 14px;
+        background: var(--shamba-green);
+        color: var(--shamba-card);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:active { background: var(--shamba-green-deep); }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <img src="/icons/icon-192.png" alt="" />
+      <h1>You're offline</h1>
+      <p>Shamba Space needs an internet connection. Check your data or Wi-Fi, then try again.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+  </body>
+</html>

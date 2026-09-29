@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { FeedComposer } from "./FeedComposer";
+import { useSuspendReelPlayback } from "./ReelPlayback";
+import { useBackToClose } from "@/lib/useBackToClose";
 
 // A large always-visible composer box no longer fits a one-Reel-fills-
 // the-viewport experience, so post creation moves behind a floating
@@ -22,6 +24,13 @@ import { FeedComposer } from "./FeedComposer";
 export function FeedComposerLauncher() {
   const [open, setOpen] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Android Back closes the composer (see lib/useBackToClose); posting
+  // closes it programmatically via onPosted, which the hook also handles.
+  const closeComposer = useCallback(() => setOpen(false), []);
+  const requestClose = useBackToClose(open, closeComposer);
+
+  // No Reel keeps playing behind the composer.
+  useSuspendReelPlayback("composer", open);
 
   useEffect(() => {
     if (!open) return;
@@ -30,7 +39,7 @@ export function FeedComposerLauncher() {
 
   function handleKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Escape") {
-      setOpen(false);
+      requestClose();
     }
   }
 
@@ -55,7 +64,7 @@ export function FeedComposerLauncher() {
           onKeyDown={handleKeyDown}
           className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50 outline-none sm:items-center sm:justify-center"
           onClick={(event) => {
-            if (event.target === event.currentTarget) setOpen(false);
+            if (event.target === event.currentTarget) requestClose();
           }}
         >
           <div className="max-h-[85dvh] overflow-y-auto rounded-t-shamba border-t border-shamba-line bg-shamba-bg p-4 sm:w-full sm:max-w-sm sm:rounded-shamba sm:border">
@@ -68,7 +77,7 @@ export function FeedComposerLauncher() {
               </h2>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={requestClose}
                 aria-label="Close"
                 className="inline-flex size-8 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-card hover:text-shamba-ink"
               >

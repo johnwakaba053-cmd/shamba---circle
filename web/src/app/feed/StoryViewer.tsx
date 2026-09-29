@@ -11,11 +11,11 @@ import {
   Tag,
   Trash2,
   UserRound,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { VideoMuteButton } from "@/components/VideoMuteButton";
+import { useBackToClose } from "@/lib/useBackToClose";
 import { fetchCreatorActiveStories, type ActiveStory, type StoryDetail } from "./stories";
 
 // Full-screen Story viewer -- deliberately isolated from ReelFeed.tsx/
@@ -55,6 +55,8 @@ export function StoryViewer({
 }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Android Back closes this overlay (see lib/useBackToClose).
+  const requestClose = useBackToClose(true, onClose);
   const videoRef = useRef<HTMLVideoElement>(null);
   const pendingEdgeRef = useRef<PendingEdge>("start");
 
@@ -225,7 +227,7 @@ export function StoryViewer({
       if (deleteStatus.kind === "confirming" || deleteStatus.kind === "error") {
         setDeleteStatus({ kind: "idle" });
       } else if (deleteStatus.kind === "idle") {
-        onClose();
+        requestClose();
       }
     } else if (event.key === "ArrowRight") {
       goToNext();
@@ -395,18 +397,11 @@ export function StoryViewer({
 
               <div className="flex items-center gap-1">
                 {currentStory.mediaType === "video" && (
-                  <button
-                    type="button"
-                    onClick={() => setMuted((value) => !value)}
-                    aria-label={muted ? "Unmute" : "Mute"}
-                    className="inline-flex size-8 items-center justify-center rounded-full bg-black/30 text-shamba-card backdrop-blur-sm"
-                  >
-                    {muted ? (
-                      <VolumeX className="size-4" aria-hidden="true" />
-                    ) : (
-                      <Volume2 className="size-4" aria-hidden="true" />
-                    )}
-                  </button>
+                  <VideoMuteButton
+                    muted={muted}
+                    onToggle={() => setMuted((value) => !value)}
+                    className="size-8"
+                  />
                 )}
                 {isOwnStory && (
                   <button
@@ -421,7 +416,7 @@ export function StoryViewer({
                 )}
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={requestClose}
                   aria-label="Close Story"
                   disabled={deleteStatus.kind === "deleting"}
                   className="inline-flex size-8 items-center justify-center rounded-full bg-black/30 text-shamba-card backdrop-blur-sm disabled:cursor-not-allowed disabled:opacity-70"
@@ -523,7 +518,7 @@ export function StoryViewer({
                         key={mention.profileId}
                         className="font-mono text-xs text-shamba-card/60 drop-shadow"
                       >
-                        @a Shamba Circle member
+                        @a Shamba Space member
                       </span>
                     ),
                   )}

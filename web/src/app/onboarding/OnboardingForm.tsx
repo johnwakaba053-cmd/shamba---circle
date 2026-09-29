@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Loader2, UserRound, Users } from "lucide-react";
+import { ArrowRight, ChevronRight, Loader2, Sprout, UserRound, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { PRODUCT_PILLARS } from "@/components/productPillars";
 
 const MAX_DISPLAY_NAME_LENGTH = 80;
 
@@ -15,6 +17,21 @@ const ROLE_LABELS: Record<Role, string> = {
   buyer: "Buyer",
   seller: "Seller",
 };
+// One plain-language line per role, so "Buyer" vs "Seller" never has to
+// be guessed at by someone who's never seen Shamba Space before.
+const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  farmer: "I grow crops or keep livestock",
+  buyer: "I buy produce or farm products",
+  seller: "I sell produce, inputs, tools or services",
+};
+
+function StepLabel({ step }: { step: 1 | 2 }) {
+  return (
+    <p className="font-mono text-xs font-medium uppercase tracking-wider text-shamba-ochre">
+      Step {step} of 2
+    </p>
+  );
+}
 
 type Status =
   | { kind: "idle" }
@@ -31,10 +48,14 @@ export function OnboardingForm({
   userId,
   initialDisplayName,
   hasRoles,
+  returnTo = null,
 }: {
   userId: string;
   initialDisplayName: string;
   hasRoles: boolean;
+  // A validated /reels/<uuid> the farmer was on their way to (a shared
+  // Reel link) -- offered as the main next step once they're set up.
+  returnTo?: string | null;
 }) {
   // A saved name with no roles yet resumes directly at the roles step;
   // no name preserves the existing behavior of starting at the name step.
@@ -207,10 +228,72 @@ export function OnboardingForm({
   }
 
   if (step === "success") {
+    const firstName = displayName.trim().split(/\s+/)[0];
+
     return (
-      <p role="status" className="mt-6 text-sm font-semibold text-shamba-green">
-        You&apos;re all set. Welcome to Shamba Circle.
-      </p>
+      <>
+        <Sprout className="size-7 text-shamba-green" aria-hidden="true" />
+
+        <h1
+          role="status"
+          className="mt-4 font-display text-2xl font-bold leading-tight tracking-tight text-shamba-ink"
+        >
+          Welcome to Shamba Space{firstName ? `, ${firstName}` : ""}!
+        </h1>
+        <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
+          You&apos;re all set. Here&apos;s where to start:
+        </p>
+
+        <ul className="mt-5 flex flex-col gap-2">
+          {PRODUCT_PILLARS.map(({ key, icon: Icon, label, description, href, tone }) => (
+            <li key={key}>
+              <Link
+                href={href}
+                className="flex items-center gap-3 rounded-shamba border border-shamba-line bg-shamba-bg p-3 transition-colors hover:border-shamba-green"
+              >
+                <span className={`flex size-9 shrink-0 items-center justify-center rounded-full ${tone}`}>
+                  <Icon className="size-5" aria-hidden="true" />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="font-sans text-sm font-semibold text-shamba-ink">{label}</span>
+                  <span className="text-xs leading-5 text-shamba-ink-soft">{description}</span>
+                </span>
+                <ChevronRight className="size-4 shrink-0 text-shamba-ink-soft" aria-hidden="true" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+
+        <p className="mt-4 text-sm leading-6 text-shamba-ink-soft">
+          Tip: add your county in{" "}
+          <Link href="/profile" className="font-semibold text-shamba-green hover:text-shamba-green-deep">
+            Profile
+          </Link>{" "}
+          to get weather alerts for your area.
+        </p>
+
+        {returnTo && (
+          <Link
+            href={returnTo}
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep"
+          >
+            Watch the shared Reel
+            <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
+        )}
+
+        <Link
+          href="/communities"
+          className={
+            returnTo
+              ? "mt-2 inline-flex w-full items-center justify-center gap-2 rounded-shamba border border-shamba-line px-6 py-3 font-sans text-base font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg"
+              : "mt-5 inline-flex w-full items-center justify-center gap-2 rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep"
+          }
+        >
+          Find your community
+          <ArrowRight className="size-4" aria-hidden="true" />
+        </Link>
+      </>
     );
   }
 
@@ -245,7 +328,10 @@ export function OnboardingForm({
       <>
         <Users className="size-7 text-shamba-green" aria-hidden="true" />
 
-        <h1 className="mt-4 font-display text-2xl font-bold leading-tight tracking-tight text-shamba-ink">
+        <div className="mt-4">
+          <StepLabel step={2} />
+        </div>
+        <h1 className="mt-1 font-display text-2xl font-bold leading-tight tracking-tight text-shamba-ink">
           What best describes you?
         </h1>
         <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
@@ -266,7 +352,10 @@ export function OnboardingForm({
                   disabled={isLoading}
                   className="size-5 rounded border-shamba-line text-shamba-green focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
                 />
-                {ROLE_LABELS[role]}
+                <span className="flex flex-col">
+                  <span className="font-semibold">{ROLE_LABELS[role]}</span>
+                  <span className="text-sm text-shamba-ink-soft">{ROLE_DESCRIPTIONS[role]}</span>
+                </span>
               </label>
             ))}
           </div>
@@ -294,11 +383,15 @@ export function OnboardingForm({
     <>
       <UserRound className="size-7 text-shamba-green" aria-hidden="true" />
 
-      <h1 className="mt-4 font-display text-2xl font-bold leading-tight tracking-tight text-shamba-ink">
+      <div className="mt-4">
+        <StepLabel step={1} />
+      </div>
+      <h1 className="mt-1 font-display text-2xl font-bold leading-tight tracking-tight text-shamba-ink">
         What should we call you?
       </h1>
       <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
-        This is the name other farmers in your circle will see.
+        This is the name other farmers will see when you post, comment
+        or message.
       </p>
 
       <form onSubmit={handleSaveName} className="mt-6 flex flex-col gap-4">

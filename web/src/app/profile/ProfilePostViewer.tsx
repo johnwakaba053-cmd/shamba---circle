@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import type { Reel } from "@/app/feed/types";
 import { FeedHeaderVisibilityProvider } from "@/app/feed/FeedHeaderVisibility";
 import { ReelFeed } from "@/app/feed/ReelFeed";
+import { useBackToClose } from "@/lib/useBackToClose";
 
 // Thin full-screen wrapper around Feed's own existing vertical viewer --
 // not a second media viewer. ReelFeed/ReelSlide/ReelMedia/ReelInfo/
@@ -27,6 +28,14 @@ export function ProfilePostViewer({
   onClose: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // Android/browser Back closes the viewer and stays on the profile,
+  // instead of leaving the profile page -- via the shared overlay-history
+  // hook (lib/useBackToClose), the same one the Feed's overlays use, so a
+  // full-screen photo/video opened inside this viewer closes first. The
+  // address never changes: the canonical /reels/<id> link is what Share
+  // gives out, and switching the URL here would make any router.refresh()
+  // inside the viewer load the Reel page instead of the profile.
+  const requestClose = useBackToClose(true, onClose);
 
   useEffect(() => {
     const original = document.body.style.overflow;
@@ -42,7 +51,7 @@ export function ProfilePostViewer({
 
   function handleKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Escape") {
-      onClose();
+      requestClose();
     }
   }
 
@@ -58,7 +67,7 @@ export function ProfilePostViewer({
     >
       <button
         type="button"
-        onClick={onClose}
+        onClick={requestClose}
         aria-label="Close post viewer"
         className="absolute right-3 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-30 inline-flex size-9 items-center justify-center rounded-full bg-black/30 text-shamba-card transition-colors hover:bg-black/50"
       >

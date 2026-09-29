@@ -1,15 +1,16 @@
 import Link from "next/link";
 import {
-  Bell,
   BookOpen,
+  Clapperboard,
+  CloudSun,
   MessageCircle,
-  Rss,
   Sprout,
   Store,
   TrendingUp,
   UserRound,
   Users,
 } from "lucide-react";
+import { NavLink } from "./NavLink";
 import { NotificationBell } from "./NotificationBell";
 import { SignOutButton } from "./SignOutButton";
 
@@ -18,84 +19,99 @@ import { SignOutButton } from "./SignOutButton";
 // as one component now that six pages need the identical markup, rather
 // than the per-page duplication convention this project used while only
 // one or two pages needed it.
+//
+// Layout: every destination is a labelled item (icon AND word, never an
+// icon alone). Top row: brand, then the farmer's own things --
+// Notifications (with its unread count) always, plus Profile and Sign
+// out from sm up. Second row: the places to go, in the landing page's
+// pillar order (Communities, Farming Reels, Weather, Marketplace) then
+// Messages and the rest. On phones that row scrolls sideways instead of
+// wrapping (a fade on the right edge shows there's more), and Profile /
+// Sign out sit at its end since the top row has no room for them.
 export function AppHeader() {
   return (
-    <header className="mx-auto flex w-full max-w-5xl flex-wrap items-center justify-between gap-y-2 gap-x-2 px-6 py-6 sm:px-10">
-      <div className="flex items-center gap-2">
-        <Sprout className="size-6 text-shamba-green" aria-hidden="true" />
-        <span className="font-display text-lg font-medium tracking-tight text-shamba-ink">
-          Shamba Circle
-        </span>
+    <header className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-4 pt-4 pb-2 sm:gap-3 sm:px-10 sm:pt-6 sm:pb-3">
+      <div className="flex items-center justify-between gap-2">
+        <Link href="/communities" className="flex items-center gap-2">
+          <Sprout className="size-6 text-shamba-green" aria-hidden="true" />
+          <span className="font-display text-lg font-medium tracking-tight text-shamba-ink">
+            Shamba Space
+          </span>
+        </Link>
+
+        <div className="flex items-center gap-6">
+          <NotificationBell />
+          <span className="hidden sm:contents">
+            <ProfileNavLink />
+            <span className="pb-1">
+              <SignOutButton />
+            </span>
+          </span>
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-4">
-        <Link
-          href="/communities"
-          className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+      <div className="relative -mx-4 sm:mx-0">
+        <nav
+          aria-label="Main"
+          className="flex items-center gap-5 overflow-x-auto whitespace-nowrap border-b border-shamba-line pl-4 pr-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:gap-x-6 sm:gap-y-1 sm:overflow-visible sm:px-0"
         >
-          <Users className="size-4" aria-hidden="true" />
-          Communities
-        </Link>
+          <NavLink href="/communities">
+            <Users className="size-4" aria-hidden="true" />
+            Communities
+          </NavLink>
 
-        <Link
-          href="/feed"
-          className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
-        >
-          <Rss className="size-4" aria-hidden="true" />
-          Feed
-        </Link>
+          <NavLink href="/feed">
+            <Clapperboard className="size-4" aria-hidden="true" />
+            Farming Reels
+          </NavLink>
 
-        <Link
-          href="/marketplace"
-          className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
-        >
-          <Store className="size-4" aria-hidden="true" />
-          Marketplace
-        </Link>
+          <NavLink href="/weather">
+            <CloudSun className="size-4" aria-hidden="true" />
+            Weather &amp; Alerts
+          </NavLink>
 
-        <Link
-          href="/market-prices"
-          className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
-        >
-          <TrendingUp className="size-4" aria-hidden="true" />
-          Market Prices
-        </Link>
+          <NavLink href="/marketplace">
+            <Store className="size-4" aria-hidden="true" />
+            Marketplace
+          </NavLink>
 
-        <Link
-          href="/education"
-          className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
-        >
-          <BookOpen className="size-4" aria-hidden="true" />
-          Education
-        </Link>
+          <NavLink href="/messages">
+            <MessageCircle className="size-4" aria-hidden="true" />
+            Messages
+          </NavLink>
 
-        <Link
-          href="/alerts"
-          className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
-        >
-          <Bell className="size-4" aria-hidden="true" />
-          Alerts
-        </Link>
+          <NavLink href="/market-prices">
+            <TrendingUp className="size-4" aria-hidden="true" />
+            Market Prices
+          </NavLink>
 
-        <Link
-          href="/messages"
-          className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
-        >
-          <MessageCircle className="size-4" aria-hidden="true" />
-          Messages
-        </Link>
+          <NavLink href="/education">
+            <BookOpen className="size-4" aria-hidden="true" />
+            Education
+          </NavLink>
 
-        <Link
-          href="/profile"
-          className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
-        >
-          <UserRound className="size-4" aria-hidden="true" />
-          Profile
-        </Link>
+          <span className="contents sm:hidden">
+            <ProfileNavLink />
+            <span className="pb-1">
+              <SignOutButton />
+            </span>
+          </span>
+        </nav>
 
-        <NotificationBell />
-        <SignOutButton />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-shamba-bg to-transparent sm:hidden"
+        />
       </div>
     </header>
+  );
+}
+
+function ProfileNavLink() {
+  return (
+    <NavLink href="/profile" exact>
+      <UserRound className="size-4" aria-hidden="true" />
+      Profile
+    </NavLink>
   );
 }

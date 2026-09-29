@@ -11,6 +11,7 @@ import {
   Sprout,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { RETURN_TO_PARAM, safeReelReturnPath, withReturnTo } from "@/lib/reelUrl";
 
 type Step = "phone" | "otp" | "redirecting";
 
@@ -46,6 +47,14 @@ async function routeAfterSignIn(
   router: ReturnType<typeof useRouter>,
   userId: string,
 ) {
+  // A shared Reel link that sent a signed-out visitor here arrives as
+  // /sign-in?next=/reels/<uuid>. safeReelReturnPath() accepts only that
+  // exact shape (anything else is ignored), so with no valid `next` every
+  // destination below is exactly what it always was.
+  const returnTo = safeReelReturnPath(
+    new URLSearchParams(window.location.search).get(RETURN_TO_PARAM),
+  );
+
   try {
     const [{ data: profile, error: profileError }, { count: roleCount, error: rolesError }] =
       await Promise.all([
@@ -57,14 +66,14 @@ async function routeAfterSignIn(
       ]);
 
     if (profileError || rolesError) {
-      router.push("/onboarding");
+      router.push(withReturnTo("/onboarding", returnTo));
       return;
     }
 
     const isOnboarded = Boolean(profile?.display_name?.trim()) && (roleCount ?? 0) > 0;
-    router.push(isOnboarded ? "/communities" : "/onboarding");
+    router.push(isOnboarded ? (returnTo ?? "/communities") : withReturnTo("/onboarding", returnTo));
   } catch {
-    router.push("/onboarding");
+    router.push(withReturnTo("/onboarding", returnTo));
   }
 }
 
@@ -164,11 +173,14 @@ export default function SignIn() {
 
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
-      <header className="mx-auto flex w-full max-w-5xl items-center gap-2 px-6 py-6 sm:px-10">
-        <Sprout className="size-6 text-shamba-green" aria-hidden="true" />
-        <span className="font-display text-lg font-medium tracking-tight text-shamba-ink">
-          Shamba Circle
-        </span>
+      <header className="mx-auto flex w-full max-w-5xl flex-wrap items-baseline gap-x-3 gap-y-1 px-6 py-6 sm:px-10">
+        <Link href="/" className="flex items-center gap-2 self-center">
+          <Sprout className="size-6 text-shamba-green" aria-hidden="true" />
+          <span className="font-display text-lg font-medium tracking-tight text-shamba-ink">
+            Shamba Space
+          </span>
+        </Link>
+        <span className="text-sm text-shamba-ink-soft">Everything farming. In one space.</span>
       </header>
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
@@ -178,11 +190,11 @@ export default function SignIn() {
               <Smartphone className="size-7 text-shamba-green" aria-hidden="true" />
 
               <h1 className="mt-4 font-display text-2xl font-bold leading-tight tracking-tight text-shamba-ink">
-                Join with your phone number
+                Join or sign in with your phone
               </h1>
               <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
-                We&apos;ll text you a code to confirm it&apos;s really you.
-                Standard SMS rates may apply.
+                No password needed. We&apos;ll text you a code to confirm
+                it&apos;s really you. Standard SMS rates may apply.
               </p>
 
               <form onSubmit={handleSendCode} className="mt-6 flex flex-col gap-4">
@@ -314,7 +326,7 @@ export default function SignIn() {
             className="mt-6 inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
-            Back to Shamba Circle
+            What is Shamba Space?
           </Link>
         )}
       </main>

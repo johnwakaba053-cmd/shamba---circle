@@ -6,9 +6,9 @@ import { ReelFollowControl } from "./ReelFollowControl";
 import { ReelLikeControl } from "./ReelLikeControl";
 
 // Vertical icon rail, lower-right, over the media -- like, comments,
-// follow. Share is intentionally omitted: no share feature exists
-// anywhere else in this codebase yet, and the instruction for this
-// stage is to surface it only "if already available."
+// follow. Share lives next to the author's name in ReelInfo instead:
+// one more rail button would push the rail up into the Feed's "New
+// Reel" button.
 export function ReelInteractionRail({
   reel,
   onOpenComments,

@@ -38,12 +38,13 @@ export default async function Alerts() {
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
         <div>
           <h1 className="font-display text-3xl font-bold leading-tight tracking-tight text-shamba-ink">
-            Alerts
+            Weather &amp; Alerts
           </h1>
           <p className="mt-2 max-w-2xl text-base leading-6 text-shamba-ink-soft">
-            Matched to the county, crops, and livestock you&apos;ve set in
-            your farmer preferences. This is a preview of Shamba Circle&apos;s
-            alert system, not a live, real-time feed yet.
+            Weather, pest, disease and market alerts matched to the county,
+            crops, and livestock you&apos;ve set in your farmer preferences.
+            This is a preview of Shamba Space&apos;s alert system, not a
+            live, real-time feed yet.
           </p>
 
           {!error && (alerts?.length ?? 0) > 0 && (

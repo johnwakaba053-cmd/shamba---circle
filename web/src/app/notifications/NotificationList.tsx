@@ -3,7 +3,11 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import type { NotificationRow } from "@/lib/notifications";
+import {
+  attachNotificationReelIds,
+  type NotificationItem,
+  type NotificationRow,
+} from "@/lib/notifications";
 import { NotificationCard } from "./NotificationCard";
 
 const PAGE_SIZE = 20;
@@ -13,7 +17,7 @@ export function NotificationList({
   initialNextCursor,
   initialUnreadCount,
 }: {
-  initialNotifications: NotificationRow[];
+  initialNotifications: NotificationItem[];
   initialNextCursor: string | null;
   initialUnreadCount: number;
 }) {
@@ -30,7 +34,7 @@ export function NotificationList({
   // server-side (mark_notification_as_read no-ops on an already-read or
   // foreign id), so a failure here just means the read state reverts on
   // the next full page load rather than corrupting anything.
-  async function handleOpen(notification: NotificationRow) {
+  async function handleOpen(notification: NotificationItem) {
     if (notification.read_at) return;
 
     const readAt = new Date().toISOString();
@@ -94,7 +98,7 @@ export function NotificationList({
 
       const rows = data as NotificationRow[];
       const hasMore = rows.length > PAGE_SIZE;
-      const page = rows.slice(0, PAGE_SIZE);
+      const page = await attachNotificationReelIds(supabase, rows.slice(0, PAGE_SIZE));
 
       setNotifications((prev) => [...prev, ...page]);
       setNextCursor(hasMore ? (page[page.length - 1]?.created_at ?? null) : null);

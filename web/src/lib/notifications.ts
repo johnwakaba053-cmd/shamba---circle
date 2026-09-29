@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { reelPath } from "@/lib/reelUrl";
 
 // Mirrors the exact vocabulary the notifications foundation migration's
 // CHECK constraints enforce -- kept as a plain union, not re-derived from
@@ -43,7 +44,7 @@ export type NotificationRow = {
 export async function fetchMyNotifications(
   supabase: SupabaseClient,
   options?: { limit?: number; before?: string | null },
-): Promise<{ notifications: NotificationRow[]; nextCursor: string | null; error: boolean }> {
+): Promise<{ notifications: NotificationItem[]; nextCursor: string | null; error: boolean }> {
   const limit = options?.limit ?? 20;
 
   const { data, error } = await supabase.rpc("get_my_notifications", {
@@ -57,8 +58,9 @@ export async function fetchMyNotifications(
 
   const rows = data as NotificationRow[];
   const hasMore = rows.length > limit;
-  const notifications = rows.slice(0, limit);
-  const nextCursor = hasMore ? (notifications[notifications.length - 1]?.created_at ?? null) : null;
+  const page = rows.slice(0, limit);
+  const nextCursor = hasMore ? (page[page.length - 1]?.created_at ?? null) : null;
+  const notifications = await attachNotificationReelIds(supabase, page);
 
   return { notifications, nextCursor, error: false };
 }
@@ -71,16 +73,65 @@ export async function fetchMyUnreadNotificationCount(supabase: SupabaseClient): 
   return Number(data);
 }
 
+// A notification plus the Reel (posts.id) it is about, when it is about
+// one. The notification triggers store:
+//   - likes and mentions:            entity_type "post",         entity_id = the post (Reel) id;
+//   - comments and comment reactions: entity_type "post_comment", entity_id = the COMMENT id,
+// so for comments the Reel id is looked up (see attachNotificationReelIds).
+export type NotificationItem = NotificationRow & { reelId: string | null };
+
+// Resolves each notification's Reel id, with ONE batched post_comments
+// lookup per page (never one per notification). post_comments is
+// readable by any signed-in farmer under its existing RLS, so this reads
+// nothing the recipient couldn't already read. A comment that has since
+// been deleted simply resolves to null -- the card then isn't a link,
+// exactly as before. Opening the Reel is still gated by /reels/[reelId]
+// itself (Feed-level vs community membership), never by this link.
+export async function attachNotificationReelIds(
+  supabase: SupabaseClient,
+  notifications: NotificationRow[],
+): Promise<NotificationItem[]> {
+  const commentIds = Array.from(
+    new Set(
+      notifications
+        .filter((n) => n.entity_type === "post_comment" && n.entity_id)
+        .map((n) => n.entity_id as string),
+    ),
+  );
+
+  const postIdByCommentId = new Map<string, string>();
+  if (commentIds.length > 0) {
+    const { data } = await supabase.from("post_comments").select("id, post_id").in("id", commentIds);
+    for (const row of (data ?? []) as { id: string; post_id: string }[]) {
+      postIdByCommentId.set(row.id, row.post_id);
+    }
+  }
+
+  return notifications.map((n) => ({
+    ...n,
+    reelId:
+      n.entity_type === "post"
+        ? n.entity_id
+        : n.entity_type === "post_comment" && n.entity_id
+          ? (postIdByCommentId.get(n.entity_id) ?? null)
+          : null,
+  }));
+}
+
 // The only place a notification's destination is decided -- never
-// invented per entity_type. "post" and "post_comment" deliberately
-// return null: Feed has no single-post route and Communities has no
-// comment-level deep link, so there is no existing, safe destination to
-// send a farmer to yet. A notification with no href still renders (see
-// NotificationCard), it just isn't a link.
+// invented per entity_type. Reel notifications (likes, comments, comment
+// reactions, mentions) open the Reel's canonical page, /reels/<id>, which
+// itself enforces who may see it (members-only state for community Reels
+// the recipient isn't a member of, not-found for a deleted Reel). A
+// notification with no href still renders (see NotificationCard), it
+// just isn't a link.
 export function getNotificationHref(
-  notification: Pick<NotificationRow, "entity_type" | "entity_id">,
+  notification: Pick<NotificationRow, "entity_type" | "entity_id"> & { reelId?: string | null },
 ): string | null {
   switch (notification.entity_type) {
+    case "post":
+    case "post_comment":
+      return notification.reelId ? reelPath(notification.reelId) : null;
     case "alert":
       // Alerts have no single-alert route -- the personalized list at
       // /alerts is the existing, safe destination.

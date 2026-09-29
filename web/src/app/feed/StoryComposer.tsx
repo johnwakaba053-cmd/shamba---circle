@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { randomId } from "@/lib/randomId";
 import { parseHashtagInput } from "./hashtags";
 import {
   detectActiveMentionQuery,
@@ -13,6 +14,7 @@ import {
   type MentionCandidate,
 } from "./mentions";
 import { TOPICS, type Topic } from "./topics";
+import { useBackToClose } from "@/lib/useBackToClose";
 
 // Story creation. Deliberately a self-contained composer rather than a
 // refactor of FeedComposer.tsx into something shared -- same "Feed-
@@ -53,6 +55,8 @@ export function StoryComposer({
 }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Android Back closes this overlay (see lib/useBackToClose).
+  const requestClose = useBackToClose(true, onClose);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const captionRef = useRef<HTMLTextAreaElement>(null);
 
@@ -107,7 +111,7 @@ export function StoryComposer({
 
   function handleDialogKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Escape" && !isPublishing) {
-      onClose();
+      requestClose();
     }
   }
 
@@ -216,7 +220,7 @@ export function StoryComposer({
       // that fits the existing schema -- and the story-media INSERT
       // policy only checks the profile_id path segment, so it doesn't
       // need the stories row to exist yet either.
-      const storyId = crypto.randomUUID();
+      const storyId = randomId();
       const isVideo = file.type.startsWith("video/");
       const extension = file.name.includes(".")
         ? file.name.split(".").pop()
@@ -334,7 +338,7 @@ export function StoryComposer({
       onKeyDown={handleDialogKeyDown}
       className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50 outline-none sm:items-center sm:justify-center"
       onClick={(event) => {
-        if (event.target === event.currentTarget && !isPublishing) onClose();
+        if (event.target === event.currentTarget && !isPublishing) requestClose();
       }}
     >
       <div className="max-h-[90dvh] w-full overflow-y-auto rounded-t-shamba border-t border-shamba-line bg-shamba-bg p-4 sm:max-w-sm sm:rounded-shamba sm:border">
@@ -344,7 +348,7 @@ export function StoryComposer({
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             disabled={isPublishing}
             aria-label="Close"
             className="inline-flex size-8 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-card hover:text-shamba-ink disabled:cursor-not-allowed disabled:opacity-70"
@@ -538,7 +542,7 @@ export function StoryComposer({
         <div className="mt-3 flex items-center justify-end gap-2">
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             disabled={isPublishing}
             className="inline-flex items-center justify-center rounded-shamba px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink disabled:cursor-not-allowed disabled:opacity-70"
           >

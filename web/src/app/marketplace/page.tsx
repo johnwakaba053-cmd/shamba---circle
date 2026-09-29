@@ -205,7 +205,7 @@ export default async function Marketplace({
           </h1>
           <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
             Buy, sell, and find what your farm needs — straight from other
-            farmers in Shamba Circle.
+            farmers in Shamba Space.
           </p>
 
           <Link

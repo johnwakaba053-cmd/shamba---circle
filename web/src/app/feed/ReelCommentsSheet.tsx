@@ -6,6 +6,7 @@ import { PostCommentComposer } from "../communities/[id]/PostCommentComposer";
 import { PostCommentItem } from "../communities/[id]/PostCommentItem";
 import { PostCommentReactions } from "../communities/[id]/PostCommentReactions";
 import type { Reel } from "./types";
+import { useBackToClose } from "@/lib/useBackToClose";
 
 // Bottom sheet over a light background (not over media), so the
 // existing Community comment components are reused completely
@@ -20,6 +21,8 @@ import type { Reel } from "./types";
 // the two are the same kind of full-screen overlay over Reel content.
 export function ReelCommentsSheet({ reel, onClose }: { reel: Reel; onClose: () => void }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // Android Back closes this overlay (see lib/useBackToClose).
+  const requestClose = useBackToClose(true, onClose);
 
   useEffect(() => {
     const original = document.body.style.overflow;
@@ -35,7 +38,7 @@ export function ReelCommentsSheet({ reel, onClose }: { reel: Reel; onClose: () =
 
   function handleKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Escape") {
-      onClose();
+      requestClose();
     }
   }
 
@@ -49,7 +52,7 @@ export function ReelCommentsSheet({ reel, onClose }: { reel: Reel; onClose: () =
       onKeyDown={handleKeyDown}
       className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50 outline-none"
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (event.target === event.currentTarget) requestClose();
       }}
     >
       <div className="flex max-h-[75dvh] flex-col rounded-t-shamba border-t border-shamba-line bg-shamba-card">
@@ -62,7 +65,7 @@ export function ReelCommentsSheet({ reel, onClose }: { reel: Reel; onClose: () =
           </h2>
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             aria-label="Close comments"
             className="inline-flex size-8 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-bg hover:text-shamba-ink"
           >

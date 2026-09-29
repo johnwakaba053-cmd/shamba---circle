@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useSuspendReelPlayback } from "./ReelPlayback";
 import type { ActiveStory } from "./stories";
 import { StoryBubble } from "./StoryBubble";
 import { StoryComposer } from "./StoryComposer";
@@ -31,6 +32,10 @@ export function StoriesRow({ stories }: { stories: ActiveStory[] }) {
   const [composerOpen, setComposerOpen] = useState(false);
   const [viewerCreatorIndex, setViewerCreatorIndex] = useState<number | null>(null);
   const [checkingOwnStory, setCheckingOwnStory] = useState(false);
+
+  // Reels underneath pause while a Story is being watched or created,
+  // so two videos never play (or sound) at once.
+  useSuspendReelPlayback("stories", composerOpen || viewerCreatorIndex !== null);
 
   // "Your Story" routes to one of two places: if this viewer already
   // has an active Story (found in the row's own already-fetched
@@ -62,7 +67,7 @@ export function StoriesRow({ stories }: { stories: ActiveStory[] }) {
   }
 
   return (
-    <div className="shrink-0 snap-start border-b border-shamba-line bg-shamba-card px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+0.75rem)]">
+    <div className="shrink-0 snap-start border-b border-shamba-line bg-shamba-card px-4 pb-3 pt-[calc(env(safe-area-inset-top,0px)+3.5rem)]">
       <h2 className="font-mono text-xs font-semibold uppercase tracking-wide text-shamba-ink-soft">
         Stories
       </h2>

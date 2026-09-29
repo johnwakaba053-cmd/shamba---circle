@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, ImagePlus, Loader2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { randomId } from "@/lib/randomId";
 import { parseHashtagInput } from "./hashtags";
 import {
   detectActiveMentionQuery,
@@ -219,13 +220,22 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
 
     if (isLoading) return;
 
+    // A Feed post needs a caption OR at least one photo/video -- the
+    // caption is optional when media is attached (photo-only and
+    // video-only posts are allowed; posts.body may be empty).
     const trimmed = body.trim();
-    if (trimmed.length === 0) {
-      setStatus({ kind: "error", message: "Write something before posting." });
+    if (trimmed.length === 0 && selectedFiles.length === 0) {
+      setStatus({ kind: "error", message: "Add a photo or video, or write something before posting." });
       return;
     }
 
     setStatus({ kind: "loading" });
+
+    // Tracked so an UNEXPECTED failure after the post row exists (e.g. a
+    // thrown error mid-upload) cleans up exactly like the handled failure
+    // paths below do, instead of leaving a post without its media.
+    let createdPostId: string | null = null;
+    const uploadedPaths: string[] = [];
 
     try {
       const supabase = createClient();
@@ -251,6 +261,8 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
         });
         return;
       }
+
+      createdPostId = newPost.id;
 
       if (parsedHashtags.length > 0) {
         const normalizedNames = parsedHashtags.map((tag) => tag.normalized);
@@ -320,14 +332,13 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
       }
 
       if (selectedFiles.length > 0) {
-        const uploadedPaths: string[] = [];
         let uploadFailed = false;
 
         for (const file of selectedFiles) {
           const extension = file.name.includes(".")
             ? file.name.split(".").pop()
             : file.type.split("/")[1];
-          const path = `${newPost.id}/${crypto.randomUUID()}.${extension}`;
+          const path = `${newPost.id}/${randomId()}.${extension}`;
 
           const { error: uploadError } = await supabase.storage
             .from("post-media")
@@ -372,6 +383,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
         }
       }
 
+      createdPostId = null; // fully saved -- nothing to clean up
       setBody("");
       setTopic(null);
       setHashtagInput("");
@@ -384,6 +396,19 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
       router.refresh();
       onPosted?.();
     } catch {
+      if (createdPostId) {
+        // Best effort, same as the handled failure paths: never leave a
+        // half-created post (or its orphaned files) behind.
+        try {
+          const supabase = createClient();
+          if (uploadedPaths.length > 0) {
+            await supabase.storage.from("post-media").remove(uploadedPaths);
+          }
+          await supabase.from("posts").delete().eq("id", createdPostId);
+        } catch {
+          // The farmer still sees the error below and can try again.
+        }
+      }
       setStatus({
         kind: "error",
         message: "Something went wrong. Please try again in a moment.",
@@ -404,7 +429,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
         disabled={isLoading}
         rows={3}
         maxLength={MAX_BODY_LENGTH}
-        placeholder="Share a photo, video, or update with every farmer on Shamba Circle… Type @ to mention someone."
+        placeholder="Share a photo, video, or update with every farmer on Shamba Space… Type @ to mention someone."
         className="w-full rounded-shamba border border-shamba-line bg-shamba-bg px-4 py-3 font-sans text-base text-shamba-ink placeholder:text-shamba-ink-soft focus:outline-none focus:ring-2 focus:ring-shamba-green disabled:opacity-60"
       />
 
@@ -602,7 +627,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
 
         <button
           type="submit"
-          disabled={isLoading || trimmedLength === 0}
+          disabled={isLoading || (trimmedLength === 0 && selectedFiles.length === 0)}
           className="inline-flex items-center justify-center gap-2 rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}

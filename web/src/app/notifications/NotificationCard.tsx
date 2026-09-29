@@ -11,7 +11,11 @@ import {
   Store,
   UserPlus,
 } from "lucide-react";
-import { getNotificationHref, type NotificationRow, type NotificationType } from "@/lib/notifications";
+import {
+  getNotificationHref,
+  type NotificationItem,
+  type NotificationType,
+} from "@/lib/notifications";
 
 // Same icon vocabulary already established elsewhere in this app for
 // the same concepts -- Bell for the generic alert type (matches the
@@ -62,7 +66,7 @@ export function NotificationCard({
   notification,
   onOpen,
 }: {
-  notification: NotificationRow;
+  notification: NotificationItem;
   onOpen: () => void;
 }) {
   const isRead = Boolean(notification.read_at);

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { randomId } from "@/lib/randomId";
 import type { EditableListingMediaItem } from "@/lib/listingMedia";
 import {
   getFilledCategoryDetailFields,
@@ -449,7 +450,7 @@ export function ListingForm({
             const extension = file.name.includes(".")
               ? file.name.split(".").pop()
               : file.type.split("/")[1];
-            const path = `${user.id}/${listingId}/${crypto.randomUUID()}.${extension}`;
+            const path = `${user.id}/${listingId}/${randomId()}.${extension}`;
 
             const { error: uploadError } = await supabase.storage
               .from("listing-media")
@@ -534,7 +535,7 @@ export function ListingForm({
           const extension = file.name.includes(".")
             ? file.name.split(".").pop()
             : file.type.split("/")[1];
-          const path = `${user.id}/${newListing.id}/${crypto.randomUUID()}.${extension}`;
+          const path = `${user.id}/${newListing.id}/${randomId()}.${extension}`;
 
           const { error: uploadError } = await supabase.storage
             .from("listing-media")

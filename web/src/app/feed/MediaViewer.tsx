@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { PostMediaItem } from "@/lib/postMedia";
+import { useBackToClose } from "@/lib/useBackToClose";
 
 // Full-screen tap-to-open viewer for Reel media. Feed-only (see
 // ReelMedia.tsx) -- Communities keeps its existing compact grid via
@@ -17,6 +18,8 @@ export function MediaViewer({
   onClose: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Android Back closes this overlay (see lib/useBackToClose).
+  const requestClose = useBackToClose(true, onClose);
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeIndex, setActiveIndex] = useState(initialIndex);
 
@@ -57,7 +60,7 @@ export function MediaViewer({
 
   function handleKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Escape") {
-      onClose();
+      requestClose();
     } else if (event.key === "ArrowLeft") {
       scrollToIndex(activeIndex - 1);
     } else if (event.key === "ArrowRight") {
@@ -70,7 +73,7 @@ export function MediaViewer({
   // per-slide wrapper, since the per-slide wrapper is what actually
   // fills the visible letterboxed area around a contained image/video.
   function closeIfBackdrop(event: React.MouseEvent) {
-    if (event.target === event.currentTarget) onClose();
+    if (event.target === event.currentTarget) requestClose();
   }
 
   return (
@@ -94,7 +97,7 @@ export function MediaViewer({
         )}
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           aria-label="Close media viewer"
           className="inline-flex size-9 items-center justify-center rounded-full bg-white/10 text-shamba-card transition-colors hover:bg-white/20"
         >

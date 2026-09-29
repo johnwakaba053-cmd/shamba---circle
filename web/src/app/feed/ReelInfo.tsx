@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Rss, Tag, UserRound } from "lucide-react";
 import type { Reel } from "./types";
 import { ReelDeleteControl } from "./ReelDeleteControl";
+import { ReelShareButton } from "./ReelShareButton";
 
 // Bottom-left info block -- author, farming/community context, optional
 // topic badge, caption, optional hashtags, optional mentions, own-post
@@ -33,22 +34,25 @@ const CAPTION_PREVIEW_CHARS = 140;
 // instead of growing the info block indefinitely.
 const MAX_VISIBLE_HASHTAGS = 6;
 
-export function ReelInfo({ reel }: { reel: Reel }) {
+// hideCaption: set for text-only Reels, whose caption is already shown
+// as the slide's main content (ReelTextCard).
+export function ReelInfo({ reel, hideCaption = false }: { reel: Reel; hideCaption?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const isLongCaption = reel.body.length > CAPTION_PREVIEW_CHARS;
 
   return (
     <div className="absolute bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] left-3 right-16 z-20 text-shamba-card">
-      <div className="flex items-center gap-2">
+      <div className="relative flex items-center gap-2">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-black/30 backdrop-blur-sm">
           <UserRound className="size-4" aria-hidden="true" />
         </span>
         <Link
           href={`/profile/${reel.profileId}`}
-          className="font-sans text-sm font-semibold drop-shadow transition-colors hover:text-shamba-green"
+          className="min-w-0 truncate font-sans text-sm font-semibold drop-shadow transition-colors hover:text-shamba-green"
         >
           {reel.authorDisplayName}
         </Link>
+        <ReelShareButton reel={reel} />
       </div>
 
       <div className="mt-2">
@@ -74,7 +78,7 @@ export function ReelInfo({ reel }: { reel: Reel }) {
         )}
       </div>
 
-      {reel.body && (
+      {reel.body && !hideCaption && (
         <div className="mt-2 text-sm leading-5 drop-shadow">
           <p
             className={
@@ -128,7 +132,7 @@ export function ReelInfo({ reel }: { reel: Reel }) {
                 key={mention.profileId}
                 className="font-mono text-xs text-shamba-card/60 drop-shadow"
               >
-                @a Shamba Circle member
+                @a Shamba Space member
               </span>
             ),
           )}

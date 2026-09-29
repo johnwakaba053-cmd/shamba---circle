@@ -9,8 +9,8 @@ import { cookies } from "next/headers";
  *
  * The setAll no-op/catch below is the standard @supabase/ssr pattern:
  * a Server Component can't write cookies, only Server Actions and Route
- * Handlers can. Writing an actual session-refresh middleware is deferred
- * to the authentication step, not included here.
+ * Handlers can. Session refresh is handled by src/proxy.ts (see
+ * ./proxy.ts), which writes the refreshed cookies back to the browser.
  *
  * No auth, profile, or role logic here yet — this is just the client
  * factory those later steps will build on.
@@ -33,9 +33,8 @@ export async function createClient() {
             );
           } catch {
             // Called from a Server Component during render, which can't
-            // set cookies. Safe to ignore once a session-refresh
-            // middleware exists (added in the auth step) to keep
-            // sessions current instead.
+            // set cookies. Safe to ignore: src/proxy.ts keeps sessions
+            // current instead.
           }
         },
       },

@@ -5,6 +5,23 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    // Regression guard: crypto.randomUUID() is undefined outside secure
+    // contexts (e.g. a phone on http://<LAN-IP>:3000). Calling it right
+    // after creating a Feed post silently dropped the post's photo/video.
+    // Use randomId() from src/lib/randomId.ts, which falls back safely.
+    rules: {
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "crypto",
+          property: "randomUUID",
+          message:
+            "crypto.randomUUID() is unavailable on plain-HTTP origins. Use randomId() from @/lib/randomId instead.",
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

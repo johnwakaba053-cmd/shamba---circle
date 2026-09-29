@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Camera, Loader2, Plus, Send, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { randomId } from "@/lib/randomId";
 
 const MAX_BODY_LENGTH = 2000;
 const MAX_MEDIA_FILES = 4;
@@ -158,7 +159,7 @@ export function PostComposer({
           const extension = file.name.includes(".")
             ? file.name.split(".").pop()
             : file.type.split("/")[1];
-          const path = `${newPost.id}/${crypto.randomUUID()}.${extension}`;
+          const path = `${newPost.id}/${randomId()}.${extension}`;
 
           const { error: uploadError } = await supabase.storage
             .from("post-media")
