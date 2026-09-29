@@ -8,8 +8,12 @@
 // callers show whatever days arrive rather than assuming seven.
 //
 // Cached for 10 minutes per query point (Next.js fetch cache), like the
-// current conditions. The request URL carries the API key, so it is never
-// logged -- errors only ever describe the status or failure kind.
+// current conditions, and likewise fetched again when a cached response is
+// more than 30 minutes old (see freshness.ts). The request URL carries the
+// API key, so it is never logged -- errors only ever describe the status
+// or failure kind.
+
+import { refetchIfStale } from "./freshness";
 
 export type HourlyForecast = {
   // "YYYY-MM-DD HH:mm" local (Africa/Nairobi).
@@ -41,7 +45,7 @@ export type WeatherForecast = {
 export type WeatherForecastResult = { ok: true; forecast: WeatherForecast } | { ok: false; error: string };
 
 type ForecastResponse = {
-  location?: { localtime?: string };
+  location?: { localtime?: string; localtime_epoch?: number };
   forecast?: {
     forecastday?: {
       date?: string;
@@ -104,7 +108,8 @@ export async function fetchWeatherForecast(lat: number, lon: number): Promise<We
       return { ok: false, error: `WeatherAPI request failed with status ${response.status}` };
     }
 
-    const data = (await response.json()) as ForecastResponse;
+    const cached = (await response.json()) as ForecastResponse;
+    const data = await refetchIfStale(url, cached, REQUEST_TIMEOUT_MS);
     const forecastDays = data.forecast?.forecastday ?? [];
 
     const days: DailyForecast[] = [];

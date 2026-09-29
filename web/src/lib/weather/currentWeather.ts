@@ -10,7 +10,10 @@
 //
 // Responses are cached for 10 minutes per query point (Next.js fetch
 // cache), so every farmer in a county shares one upstream call and the
-// free-tier quota isn't spent on page views.
+// free-tier quota isn't spent on page views. A cached response more than
+// 30 minutes old is fetched again (see freshness.ts).
+
+import { refetchIfStale } from "./freshness";
 
 export type CurrentWeather = {
   temperatureC: number;
@@ -29,7 +32,7 @@ export type CurrentWeather = {
 export type CurrentWeatherResult = { ok: true; weather: CurrentWeather } | { ok: false; error: string };
 
 type ForecastResponse = {
-  location?: { localtime?: string };
+  location?: { localtime?: string; localtime_epoch?: number };
   current?: {
     temp_c?: number;
     is_day?: number;
@@ -90,7 +93,8 @@ export async function fetchCurrentWeather(lat: number, lon: number): Promise<Cur
       return { ok: false, error: `WeatherAPI request failed with status ${response.status}` };
     }
 
-    const data = (await response.json()) as ForecastResponse;
+    const cached = (await response.json()) as ForecastResponse;
+    const data = await refetchIfStale(url, cached, REQUEST_TIMEOUT_MS);
     const current = data.current;
     if (!current || typeof current.temp_c !== "number") {
       return { ok: false, error: "WeatherAPI response had no current conditions" };
