@@ -136,8 +136,8 @@ export function PostCommentReactions({
               title={isMember ? reaction.label : "Join this community to react"}
               className={
                 isSelected
-                  ? "inline-flex items-center gap-1 rounded-shamba border border-shamba-green bg-shamba-green px-2 py-1 font-sans text-xs font-semibold text-shamba-card transition-colors disabled:cursor-not-allowed disabled:opacity-70"
-                  : "inline-flex items-center gap-1 rounded-shamba border border-shamba-line bg-shamba-bg px-2 py-1 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green disabled:cursor-not-allowed disabled:opacity-70"
+                  ? "inline-flex items-center gap-1 rounded-shamba border border-shamba-green bg-shamba-green px-2 py-1 font-sans text-xs font-semibold text-shamba-card transition-colors disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
+                  : "inline-flex items-center gap-1 rounded-shamba border border-shamba-line bg-shamba-bg px-2 py-1 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
               }
             >
               {isLoading ? (

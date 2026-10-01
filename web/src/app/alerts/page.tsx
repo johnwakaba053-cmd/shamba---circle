@@ -76,7 +76,7 @@ export default async function Alerts() {
             </p>
             <Link
               href="/profile"
-              className="mt-4 inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-green transition-colors hover:text-shamba-green-deep"
+              className="mt-4 inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-green transition-colors hover:text-shamba-green-deep relative touch-target"
             >
               Review your preferences
               <ArrowRight className="size-4" aria-hidden="true" />

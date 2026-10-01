@@ -253,7 +253,7 @@ export function PostComposer({
                 onClick={() => removeFile(index)}
                 disabled={isLoading}
                 aria-label={`Remove ${file.name}`}
-                className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-shamba-rust text-shamba-card disabled:cursor-not-allowed disabled:opacity-70"
+                className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-shamba-rust text-shamba-card disabled:cursor-not-allowed disabled:opacity-70 touch-target"
               >
                 <X className="size-3.5" aria-hidden="true" />
               </button>

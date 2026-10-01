@@ -85,7 +85,7 @@ export default async function ConversationPage({
               <Link
                 href="/messages"
                 aria-label="Back to Messages"
-                className="flex size-9 shrink-0 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-bg hover:text-shamba-ink"
+                className="flex size-9 shrink-0 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-bg hover:text-shamba-ink relative touch-target"
               >
                 <ArrowLeft className="size-5" aria-hidden="true" />
               </Link>

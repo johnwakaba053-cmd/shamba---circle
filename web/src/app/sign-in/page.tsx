@@ -174,7 +174,7 @@ export default function SignIn() {
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
       <header className="mx-auto flex w-full max-w-5xl flex-wrap items-baseline gap-x-3 gap-y-1 px-6 py-6 sm:px-10">
-        <Link href="/" className="flex items-center gap-2 self-center">
+        <Link href="/" className="flex items-center gap-2 self-center relative touch-target">
           <Sprout className="size-6 text-shamba-green" aria-hidden="true" />
           <span className="font-display text-lg font-medium tracking-tight text-shamba-ink">
             Shamba Space
@@ -297,7 +297,7 @@ export default function SignIn() {
                   type="button"
                   onClick={handleChangeNumber}
                   disabled={isLoading}
-                  className="inline-flex items-center justify-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink disabled:cursor-not-allowed disabled:opacity-70"
+                  className="inline-flex items-center justify-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
                 >
                   <ArrowLeft className="size-4" aria-hidden="true" />
                   Change phone number
@@ -323,7 +323,7 @@ export default function SignIn() {
         {step === "phone" && (
           <Link
             href="/"
-            className="mt-6 inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+            className="mt-6 inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink relative touch-target"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
             What is Shamba Space?

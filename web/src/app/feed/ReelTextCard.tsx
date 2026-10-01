@@ -47,7 +47,7 @@ export function ReelTextCard({ body }: { body: string }) {
             <button
               type="button"
               onClick={() => setExpanded((value) => !value)}
-              className="mt-2 font-mono text-xs font-semibold text-shamba-green hover:text-shamba-green-deep"
+              className="mt-2 font-mono text-xs font-semibold text-shamba-green hover:text-shamba-green-deep relative touch-target"
             >
               {expanded ? "Show less" : "Read more"}
             </button>

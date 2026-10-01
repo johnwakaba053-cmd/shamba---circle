@@ -351,7 +351,7 @@ export function StoryComposer({
             onClick={requestClose}
             disabled={isPublishing}
             aria-label="Close"
-            className="inline-flex size-8 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-card hover:text-shamba-ink disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex size-8 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-card hover:text-shamba-ink disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
           >
             <X className="size-4" aria-hidden="true" />
           </button>
@@ -388,7 +388,7 @@ export function StoryComposer({
               onClick={() => setFile(null)}
               disabled={isPublishing}
               aria-label="Remove selected media"
-              className="absolute right-2 top-2 inline-flex size-8 items-center justify-center rounded-full bg-shamba-ink/60 text-shamba-card disabled:cursor-not-allowed disabled:opacity-70"
+              className="absolute right-2 top-2 inline-flex size-8 items-center justify-center rounded-full bg-shamba-ink/60 text-shamba-card disabled:cursor-not-allowed disabled:opacity-70 touch-target"
             >
               <X className="size-4" aria-hidden="true" />
             </button>
@@ -416,7 +416,7 @@ export function StoryComposer({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isPublishing}
-            className="mt-2 font-mono text-xs font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink disabled:cursor-not-allowed disabled:opacity-70"
+            className="mt-2 font-mono text-xs font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
           >
             Change photo or video
           </button>
@@ -484,7 +484,7 @@ export function StoryComposer({
                   onClick={() => removeMention(mention.profileId)}
                   disabled={isPublishing}
                   aria-label={`Remove mention of ${mention.displayName}`}
-                  className="text-shamba-ink-soft transition-colors hover:text-shamba-rust disabled:cursor-not-allowed"
+                  className="text-shamba-ink-soft transition-colors hover:text-shamba-rust disabled:cursor-not-allowed relative touch-target"
                 >
                   <X className="size-3" aria-hidden="true" />
                 </button>
@@ -505,8 +505,8 @@ export function StoryComposer({
                 aria-pressed={isSelected}
                 className={
                   isSelected
-                    ? "rounded-full bg-shamba-green px-3 py-1 font-mono text-xs font-semibold text-shamba-card transition-colors disabled:cursor-not-allowed disabled:opacity-70"
-                    : "rounded-full border border-shamba-line px-3 py-1 font-mono text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green disabled:cursor-not-allowed disabled:opacity-70"
+                    ? "rounded-full bg-shamba-green px-3 py-1 font-mono text-xs font-semibold text-shamba-card transition-colors disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
+                    : "rounded-full border border-shamba-line px-3 py-1 font-mono text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
                 }
               >
                 {option}
@@ -544,7 +544,7 @@ export function StoryComposer({
             type="button"
             onClick={requestClose}
             disabled={isPublishing}
-            className="inline-flex items-center justify-center rounded-shamba px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex items-center justify-center rounded-shamba px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
           >
             Cancel
           </button>

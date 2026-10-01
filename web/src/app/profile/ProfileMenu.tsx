@@ -113,7 +113,7 @@ export function ProfileMenu({
         aria-label="Profile settings menu"
         aria-haspopup="menu"
         aria-expanded={open}
-        className="inline-flex size-9 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-bg hover:text-shamba-ink focus:outline-none focus:ring-2 focus:ring-shamba-green"
+        className="inline-flex size-9 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-bg hover:text-shamba-ink focus:outline-none focus:ring-2 focus:ring-shamba-green relative touch-target"
       >
         <MoreVertical className="size-5" aria-hidden="true" />
       </button>
@@ -132,7 +132,7 @@ export function ProfileMenu({
             type="button"
             role="menuitem"
             onClick={handleChangePhoto}
-            className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green"
+            className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green relative touch-target"
           >
             Change profile photo
           </button>
@@ -140,7 +140,7 @@ export function ProfileMenu({
             type="button"
             role="menuitem"
             onClick={handleRemovePhoto}
-            className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green"
+            className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green relative touch-target"
           >
             Remove profile photo
           </button>
@@ -150,7 +150,7 @@ export function ProfileMenu({
               type="button"
               role="menuitem"
               onClick={() => selectSection(link.sectionId)}
-              className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green"
+              className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green relative touch-target"
             >
               {link.label}
             </button>
@@ -165,7 +165,7 @@ export function ProfileMenu({
             type="button"
             role="menuitem"
             onClick={() => selectSection("visibility")}
-            className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green"
+            className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green relative touch-target"
           >
             <span className="block">Public / Private account</span>
             <span className="block font-mono text-xs text-shamba-ink-soft">
@@ -184,7 +184,7 @@ export function ProfileMenu({
               type="button"
               role="menuitem"
               onClick={() => selectSection(link.sectionId)}
-              className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green"
+              className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green relative touch-target"
             >
               {link.label}
             </button>

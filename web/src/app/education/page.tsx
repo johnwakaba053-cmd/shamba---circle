@@ -192,8 +192,8 @@ export default async function Education({
                   aria-current={t.id === activeTopic ? "page" : undefined}
                   className={
                     t.id === activeTopic
-                      ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card"
-                      : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink"
+                      ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card relative touch-target"
+                      : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink relative touch-target"
                   }
                 >
                   {t.emoji ? `${t.emoji} ` : ""}
@@ -219,8 +219,8 @@ export default async function Education({
                       aria-current={t.id === activeTopic ? "page" : undefined}
                       className={
                         t.id === activeTopic
-                          ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card"
-                          : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink"
+                          ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card relative touch-target"
+                          : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink relative touch-target"
                       }
                     >
                       {t.emoji ? `${t.emoji} ` : ""}
@@ -244,8 +244,8 @@ export default async function Education({
                       aria-current={t.id === activeTopic ? "page" : undefined}
                       className={
                         t.id === activeTopic
-                          ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card"
-                          : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink"
+                          ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card relative touch-target"
+                          : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink relative touch-target"
                       }
                     >
                       {t.emoji ? `${t.emoji} ` : ""}
@@ -259,7 +259,7 @@ export default async function Education({
             {activeTopic && (
               <Link
                 href={buildEducationHref(currentParams, { topic: undefined })}
-                className="inline-flex w-fit items-center font-sans text-xs font-semibold text-shamba-ink-soft underline transition-colors hover:text-shamba-ink"
+                className="inline-flex w-fit items-center font-sans text-xs font-semibold text-shamba-ink-soft underline transition-colors hover:text-shamba-ink relative touch-target"
               >
                 Clear topic filter
               </Link>
@@ -291,7 +291,7 @@ export default async function Education({
                 </div>
                 <Link
                   href={buildEducationHref({}, { type: "video" })}
-                  className="mt-3 inline-flex w-fit items-center font-sans text-xs font-semibold text-shamba-ink-soft underline transition-colors hover:text-shamba-ink"
+                  className="mt-3 inline-flex w-fit items-center font-sans text-xs font-semibold text-shamba-ink-soft underline transition-colors hover:text-shamba-ink relative touch-target"
                 >
                   See all videos
                 </Link>
@@ -331,8 +331,8 @@ export default async function Education({
                 aria-current={!activeType ? "page" : undefined}
                 className={
                   !activeType
-                    ? "rounded-shamba bg-shamba-blue px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card"
-                    : "rounded-shamba border border-shamba-line bg-shamba-card px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-blue hover:text-shamba-ink"
+                    ? "rounded-shamba bg-shamba-blue px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card relative touch-target"
+                    : "rounded-shamba border border-shamba-line bg-shamba-card px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-blue hover:text-shamba-ink relative touch-target"
                 }
               >
                 All
@@ -347,8 +347,8 @@ export default async function Education({
                     aria-current={isActive ? "page" : undefined}
                     className={
                       isActive
-                        ? "rounded-shamba bg-shamba-blue px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card"
-                        : "rounded-shamba border border-shamba-line bg-shamba-card px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-blue hover:text-shamba-ink"
+                        ? "rounded-shamba bg-shamba-blue px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card relative touch-target"
+                        : "rounded-shamba border border-shamba-line bg-shamba-card px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-blue hover:text-shamba-ink relative touch-target"
                     }
                   >
                     {RESOURCE_TYPE_LABELS[value]}
@@ -363,8 +363,8 @@ export default async function Education({
                 aria-current={!activeCategory ? "page" : undefined}
                 className={
                   !activeCategory
-                    ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card"
-                    : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink"
+                    ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card relative touch-target"
+                    : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink relative touch-target"
                 }
               >
                 All
@@ -379,8 +379,8 @@ export default async function Education({
                     aria-current={isActive ? "page" : undefined}
                     className={
                       isActive
-                        ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card"
-                        : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink"
+                        ? "rounded-shamba bg-shamba-green px-4 py-2 font-sans text-sm font-semibold text-shamba-card relative touch-target"
+                        : "rounded-shamba border border-shamba-line bg-shamba-card px-4 py-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green hover:text-shamba-ink relative touch-target"
                     }
                   >
                     {cat.name}
@@ -395,8 +395,8 @@ export default async function Education({
                 aria-current={!activeLearning ? "page" : undefined}
                 className={
                   !activeLearning
-                    ? "rounded-shamba bg-shamba-blue px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card"
-                    : "rounded-shamba border border-shamba-line bg-shamba-card px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-blue hover:text-shamba-ink"
+                    ? "rounded-shamba bg-shamba-blue px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card relative touch-target"
+                    : "rounded-shamba border border-shamba-line bg-shamba-card px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-blue hover:text-shamba-ink relative touch-target"
                 }
               >
                 All learning categories
@@ -411,8 +411,8 @@ export default async function Education({
                     aria-current={isActive ? "page" : undefined}
                     className={
                       isActive
-                        ? "rounded-shamba bg-shamba-blue px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card"
-                        : "rounded-shamba border border-shamba-line bg-shamba-card px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-blue hover:text-shamba-ink"
+                        ? "rounded-shamba bg-shamba-blue px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card relative touch-target"
+                        : "rounded-shamba border border-shamba-line bg-shamba-card px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-blue hover:text-shamba-ink relative touch-target"
                     }
                   >
                     {LEARNING_CATEGORY_LABELS[value]}

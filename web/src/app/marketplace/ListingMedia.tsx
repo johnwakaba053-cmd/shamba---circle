@@ -91,7 +91,7 @@ export function ListingMedia({
         onClick={() => scrollToIndex(activeIndex - 1)}
         disabled={activeIndex === 0}
         aria-label="Previous photo"
-        className="absolute left-2 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-black/30 p-1.5 text-shamba-card transition-opacity hover:bg-black/50 disabled:opacity-0 sm:flex"
+        className="absolute left-2 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-black/30 p-1.5 text-shamba-card transition-opacity hover:bg-black/50 disabled:opacity-0 sm:flex touch-target"
       >
         <ChevronLeft className="size-4" aria-hidden="true" />
       </button>
@@ -100,7 +100,7 @@ export function ListingMedia({
         onClick={() => scrollToIndex(activeIndex + 1)}
         disabled={activeIndex === items.length - 1}
         aria-label="Next photo"
-        className="absolute right-2 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-black/30 p-1.5 text-shamba-card transition-opacity hover:bg-black/50 disabled:opacity-0 sm:flex"
+        className="absolute right-2 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-black/30 p-1.5 text-shamba-card transition-opacity hover:bg-black/50 disabled:opacity-0 sm:flex touch-target"
       >
         <ChevronRight className="size-4" aria-hidden="true" />
       </button>

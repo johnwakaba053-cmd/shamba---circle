@@ -78,7 +78,7 @@ export function ReelShareButton({ reel }: { reel: Reel }) {
         type="button"
         onClick={handleShare}
         aria-label="Share this Reel"
-        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-black/30 px-3 font-sans text-xs font-semibold text-shamba-card backdrop-blur-sm transition-colors hover:bg-black/45"
+        className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-black/30 px-3 font-sans text-xs font-semibold text-shamba-card backdrop-blur-sm transition-colors hover:bg-black/45 relative touch-target"
       >
         {status === "copied" ? (
           <Check className="size-3.5" aria-hidden="true" />
@@ -110,7 +110,7 @@ export function ReelShareButton({ reel }: { reel: Reel }) {
           <button
             type="button"
             onClick={() => setStatus("idle")}
-            className="shrink-0 font-sans text-xs font-semibold text-shamba-card/80 hover:text-shamba-card"
+            className="shrink-0 font-sans text-xs font-semibold text-shamba-card/80 hover:text-shamba-card relative touch-target"
           >
             Done
           </button>

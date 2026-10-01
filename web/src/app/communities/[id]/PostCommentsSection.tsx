@@ -44,7 +44,7 @@ export function PostCommentsSection({
         type="button"
         onClick={() => setIsOpen((open) => !open)}
         aria-expanded={isOpen}
-        className="inline-flex min-h-9 items-center gap-1.5 rounded-shamba px-1 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-shamba px-1 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink relative touch-target"
       >
         <MessageCircle className="size-4" aria-hidden="true" />
         {comments.length === 0

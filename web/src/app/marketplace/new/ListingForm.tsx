@@ -891,7 +891,7 @@ export function ListingForm({
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={isLoading || totalPhotoCount >= MAX_PHOTOS}
-          className="inline-flex w-fit items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70"
+          className="inline-flex w-fit items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
         >
           <ImagePlus className="size-4" aria-hidden="true" />
           Add photos
@@ -918,7 +918,7 @@ export function ListingForm({
                   onClick={() => removeExistingPhoto(photo.id)}
                   disabled={isLoading}
                   aria-label="Remove this photo"
-                  className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-shamba-rust text-shamba-card disabled:cursor-not-allowed disabled:opacity-70"
+                  className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-shamba-rust text-shamba-card disabled:cursor-not-allowed disabled:opacity-70 touch-target"
                 >
                   <X className="size-3.5" aria-hidden="true" />
                 </button>
@@ -938,7 +938,7 @@ export function ListingForm({
                   onClick={() => removeFile(index)}
                   disabled={isLoading}
                   aria-label={`Remove ${file.name}`}
-                  className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-shamba-rust text-shamba-card disabled:cursor-not-allowed disabled:opacity-70"
+                  className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-shamba-rust text-shamba-card disabled:cursor-not-allowed disabled:opacity-70 touch-target"
                 >
                   <X className="size-3.5" aria-hidden="true" />
                 </button>

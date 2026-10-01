@@ -97,7 +97,7 @@ export function ProfileSettingsHost({
             type="button"
             onClick={() => setActiveSection(null)}
             aria-label="Back to profile"
-            className="inline-flex size-9 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-bg hover:text-shamba-ink focus:outline-none focus:ring-2 focus:ring-shamba-green"
+            className="inline-flex size-9 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-bg hover:text-shamba-ink focus:outline-none focus:ring-2 focus:ring-shamba-green relative touch-target"
           >
             <ArrowLeft className="size-5" aria-hidden="true" />
           </button>

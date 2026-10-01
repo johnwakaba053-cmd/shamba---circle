@@ -149,7 +149,7 @@ export function ResourceCard({
 
       <Link
         href={`/education/${resource.id}`}
-        className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-shamba border border-shamba-line px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink transition-colors hover:border-shamba-green hover:text-shamba-green"
+        className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-shamba border border-shamba-line px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink transition-colors hover:border-shamba-green hover:text-shamba-green relative touch-target"
       >
         {isVideo ? "Watch Video" : "Read Resource"}
         {isVideo ? (

@@ -67,7 +67,7 @@ export function ReelCommentsSheet({ reel, onClose }: { reel: Reel; onClose: () =
             type="button"
             onClick={requestClose}
             aria-label="Close comments"
-            className="inline-flex size-8 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-bg hover:text-shamba-ink"
+            className="inline-flex size-8 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-bg hover:text-shamba-ink relative touch-target"
           >
             <X className="size-4" aria-hidden="true" />
           </button>

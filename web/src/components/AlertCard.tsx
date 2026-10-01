@@ -199,7 +199,7 @@ export function AlertCard({ alert }: { alert: Alert }) {
             type="button"
             onClick={handleMarkRead}
             disabled={isMarking}
-            className="text-xs font-semibold text-shamba-green underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-70"
+            className="text-xs font-semibold text-shamba-green underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
           >
             {isMarking ? "Marking as read…" : "Mark as read"}
           </button>

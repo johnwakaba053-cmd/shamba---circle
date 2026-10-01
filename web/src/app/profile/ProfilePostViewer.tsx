@@ -69,7 +69,7 @@ export function ProfilePostViewer({
         type="button"
         onClick={requestClose}
         aria-label="Close post viewer"
-        className="absolute right-3 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-30 inline-flex size-9 items-center justify-center rounded-full bg-black/30 text-shamba-card transition-colors hover:bg-black/50"
+        className="absolute right-3 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-30 inline-flex size-9 items-center justify-center rounded-full bg-black/30 text-shamba-card transition-colors hover:bg-black/50 touch-target"
       >
         <X className="size-5" aria-hidden="true" />
       </button>

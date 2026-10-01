@@ -483,7 +483,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
                 onClick={() => removeMention(mention.profileId)}
                 disabled={isLoading}
                 aria-label={`Remove mention of ${mention.displayName}`}
-                className="text-shamba-ink-soft transition-colors hover:text-shamba-rust disabled:cursor-not-allowed"
+                className="text-shamba-ink-soft transition-colors hover:text-shamba-rust disabled:cursor-not-allowed relative touch-target"
               >
                 <X className="size-3" aria-hidden="true" />
               </button>
@@ -504,8 +504,8 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
               aria-pressed={isSelected}
               className={
                 isSelected
-                  ? "rounded-full bg-shamba-green px-3 py-1 font-mono text-xs font-semibold text-shamba-card transition-colors disabled:cursor-not-allowed disabled:opacity-70"
-                  : "rounded-full border border-shamba-line px-3 py-1 font-mono text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green disabled:cursor-not-allowed disabled:opacity-70"
+                  ? "rounded-full bg-shamba-green px-3 py-1 font-mono text-xs font-semibold text-shamba-card transition-colors disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
+                  : "rounded-full border border-shamba-line px-3 py-1 font-mono text-xs font-semibold text-shamba-ink-soft transition-colors hover:border-shamba-green disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
               }
             >
               {option}
@@ -564,7 +564,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
             type="button"
             onClick={() => cameraInputRef.current?.click()}
             disabled={isLoading || selectedFiles.length >= MAX_MEDIA_FILES}
-            className="inline-flex w-fit items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex w-fit items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
           >
             <Camera className="size-4" aria-hidden="true" />
             Camera
@@ -574,7 +574,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
             type="button"
             onClick={() => galleryInputRef.current?.click()}
             disabled={isLoading || selectedFiles.length >= MAX_MEDIA_FILES}
-            className="inline-flex w-fit items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex w-fit items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
           >
             <ImagePlus className="size-4" aria-hidden="true" />
             Add photo or video
@@ -610,7 +610,7 @@ export function FeedComposer({ onPosted }: { onPosted?: () => void } = {}) {
                   onClick={() => removeFile(index)}
                   disabled={isLoading}
                   aria-label={`Remove ${file.name}`}
-                  className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-shamba-rust text-shamba-card disabled:cursor-not-allowed disabled:opacity-70"
+                  className="absolute -right-1.5 -top-1.5 inline-flex size-5 items-center justify-center rounded-full bg-shamba-rust text-shamba-card disabled:cursor-not-allowed disabled:opacity-70 touch-target"
                 >
                   <X className="size-3.5" aria-hidden="true" />
                 </button>

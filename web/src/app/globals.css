@@ -91,3 +91,45 @@ body {
     outline-color: var(--shamba-card);
   }
 }
+
+/*
+ * Invisible 44x44px minimum tap area for visually compact controls, centred
+ * on the control: the ::after extends past each edge only when the control
+ * is smaller than 44px in that direction, so nothing moves or grows
+ * visibly. The control itself must be positioned (relative/absolute/fixed).
+ */
+@utility touch-target {
+  &::after {
+    content: "";
+    position: absolute;
+    inset: min(0px, calc(50% - 22px));
+  }
+}
+
+/*
+ * Pressed state: immediate feedback on tap for the same controls that get
+ * the keyboard focus ring. A slight darken plus a 2% press-in; the press-in
+ * is dropped for reduced motion. Replaces Android's grey tap flash on these
+ * controls. Disabled controls don't react.
+ */
+@layer base {
+  :where(button, [role="button"], summary, a[class*="rounded-"], .touch-target) {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  :where(button, [role="button"], summary, a[class*="rounded-"], .touch-target):active:not(
+      :disabled,
+      [aria-disabled="true"]
+    ) {
+    filter: brightness(0.94);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :where(button, [role="button"], summary, a[class*="rounded-"], .touch-target):active:not(
+        :disabled,
+        [aria-disabled="true"]
+      ) {
+      scale: 0.98;
+    }
+  }
+}

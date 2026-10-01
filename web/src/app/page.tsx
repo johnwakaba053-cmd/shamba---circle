@@ -89,7 +89,7 @@ export default async function Home() {
         </div>
         <Link
           href="/sign-in"
-          className="font-sans text-sm font-semibold text-shamba-green transition-colors hover:text-shamba-green-deep"
+          className="font-sans text-sm font-semibold text-shamba-green transition-colors hover:text-shamba-green-deep relative touch-target"
         >
           Sign in
         </Link>

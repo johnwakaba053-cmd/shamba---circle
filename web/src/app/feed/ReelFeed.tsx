@@ -269,7 +269,7 @@ function ReelFeedInner({ reels, nextCursor, header, initialIndex = 0, loadMore }
               <button
                 type="button"
                 onClick={() => void loadNextPage()}
-                className="inline-flex items-center gap-2 rounded-shamba bg-shamba-card px-5 py-2.5 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg"
+                className="inline-flex items-center gap-2 rounded-shamba bg-shamba-card px-5 py-2.5 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg relative touch-target"
               >
                 <RotateCcw className="size-4" aria-hidden="true" />
                 Retry
@@ -289,7 +289,7 @@ function ReelFeedInner({ reels, nextCursor, header, initialIndex = 0, loadMore }
               <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
                 <Link
                   href="/communities"
-                  className="inline-flex items-center gap-2 rounded-shamba bg-shamba-card px-4 py-2.5 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg"
+                  className="inline-flex items-center gap-2 rounded-shamba bg-shamba-card px-4 py-2.5 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg relative touch-target"
                 >
                   <Users className="size-4" aria-hidden="true" />
                   Communities
@@ -297,7 +297,7 @@ function ReelFeedInner({ reels, nextCursor, header, initialIndex = 0, loadMore }
                 <button
                   type="button"
                   onClick={scrollToTop}
-                  className="inline-flex items-center gap-2 rounded-shamba border border-shamba-card/40 px-4 py-2.5 font-sans text-sm font-semibold text-shamba-card transition-colors hover:bg-white/10"
+                  className="inline-flex items-center gap-2 rounded-shamba border border-shamba-card/40 px-4 py-2.5 font-sans text-sm font-semibold text-shamba-card transition-colors hover:bg-white/10 relative touch-target"
                 >
                   <ArrowUp className="size-4" aria-hidden="true" />
                   Back to top

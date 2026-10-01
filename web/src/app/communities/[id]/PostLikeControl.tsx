@@ -98,7 +98,7 @@ export function PostLikeControl({
         disabled={isLoading || !isMember}
         aria-pressed={liked}
         title={isMember ? undefined : "Join this community to like posts"}
-        className="inline-flex items-center gap-1.5 rounded-shamba border border-shamba-line px-3 py-1.5 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70"
+        className="inline-flex items-center gap-1.5 rounded-shamba border border-shamba-line px-3 py-1.5 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
       >
         {isLoading ? (
           <Loader2 className="size-4 animate-spin" aria-hidden="true" />

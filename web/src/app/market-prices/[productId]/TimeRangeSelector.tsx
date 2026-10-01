@@ -39,8 +39,8 @@ export function TimeRangeSelector({
             aria-pressed={isActive}
             className={
               isActive
-                ? "rounded-shamba bg-shamba-green px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card"
-                : "rounded-shamba border border-shamba-line px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+                ? "rounded-shamba bg-shamba-green px-3 py-1.5 font-sans text-xs font-semibold text-shamba-card relative touch-target"
+                : "rounded-shamba border border-shamba-line px-3 py-1.5 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink relative touch-target"
             }
           >
             {option.label}

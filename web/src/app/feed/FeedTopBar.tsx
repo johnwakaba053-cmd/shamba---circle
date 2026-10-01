@@ -25,7 +25,7 @@ export function FeedTopBar({
     <Link
       href={href}
       aria-label={ariaLabel}
-      className="fixed left-3 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-30 inline-flex h-9 items-center gap-1.5 rounded-full bg-black/45 pl-2 pr-3.5 font-sans text-sm font-semibold text-shamba-card shadow-sm backdrop-blur-sm transition-colors hover:bg-black/60"
+      className="fixed left-3 top-[calc(env(safe-area-inset-top,0px)+0.75rem)] z-30 inline-flex h-9 items-center gap-1.5 rounded-full bg-black/45 pl-2 pr-3.5 font-sans text-sm font-semibold text-shamba-card shadow-sm backdrop-blur-sm transition-colors hover:bg-black/60 touch-target"
     >
       <ChevronLeft className="size-4" aria-hidden="true" />
       <Sprout className="size-4 text-shamba-card" aria-hidden="true" />

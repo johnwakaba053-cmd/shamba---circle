@@ -122,7 +122,7 @@ export function ReelDeleteControl({ postId }: { postId: string }) {
         type="button"
         onClick={handleDelete}
         disabled={isLoading}
-        className="inline-flex items-center gap-1.5 font-sans text-xs font-semibold text-shamba-card/80 drop-shadow transition-colors hover:text-shamba-card disabled:cursor-not-allowed disabled:opacity-70"
+        className="inline-flex items-center gap-1.5 font-sans text-xs font-semibold text-shamba-card/80 drop-shadow transition-colors hover:text-shamba-card disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
       >
         {isLoading ? (
           <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />

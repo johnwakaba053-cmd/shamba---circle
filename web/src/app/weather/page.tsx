@@ -115,7 +115,7 @@ function LocationRow({ countyName }: { countyName: string }) {
       </p>
       <Link
         href="/profile"
-        className="inline-flex items-center rounded-full border border-shamba-line px-3 py-1 font-sans text-sm font-semibold text-shamba-green transition-colors hover:border-shamba-green hover:bg-shamba-bg"
+        className="inline-flex items-center rounded-full border border-shamba-line px-3 py-1 font-sans text-sm font-semibold text-shamba-green transition-colors hover:border-shamba-green hover:bg-shamba-bg relative touch-target"
       >
         Change county
       </Link>

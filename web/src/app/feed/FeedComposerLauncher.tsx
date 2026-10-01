@@ -79,7 +79,7 @@ export function FeedComposerLauncher() {
                 type="button"
                 onClick={requestClose}
                 aria-label="Close"
-                className="inline-flex size-8 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-card hover:text-shamba-ink"
+                className="inline-flex size-8 items-center justify-center rounded-full text-shamba-ink-soft transition-colors hover:bg-shamba-card hover:text-shamba-ink relative touch-target"
               >
                 <X className="size-4" aria-hidden="true" />
               </button>

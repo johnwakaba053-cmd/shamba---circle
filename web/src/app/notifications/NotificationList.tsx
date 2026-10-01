@@ -116,7 +116,7 @@ export function NotificationList({
             type="button"
             onClick={handleMarkAll}
             disabled={isMarkingAll}
-            className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-green transition-colors hover:text-shamba-green-deep disabled:cursor-not-allowed disabled:opacity-70"
+            className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-green transition-colors hover:text-shamba-green-deep disabled:cursor-not-allowed disabled:opacity-70 relative touch-target"
           >
             {isMarkingAll && <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />}
             {isMarkingAll ? "Marking all as read…" : "Mark all as read"}

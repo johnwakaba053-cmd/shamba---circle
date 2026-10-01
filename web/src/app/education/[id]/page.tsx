@@ -188,7 +188,7 @@ export default async function EducationResource({
             {resource.education_categories && (
               <Link
                 href={`/education?category=${resource.category_id}`}
-                className="mt-2 inline-flex items-center gap-2 font-mono text-xs font-semibold text-shamba-green transition-colors hover:text-shamba-green-deep"
+                className="mt-2 inline-flex items-center gap-2 font-mono text-xs font-semibold text-shamba-green transition-colors hover:text-shamba-green-deep relative touch-target"
               >
                 <Icon className="size-4" aria-hidden="true" />
                 {resource.education_categories.name}
@@ -283,7 +283,7 @@ export default async function EducationResource({
                 href={getYouTubeWatchUrl(videoId)}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-6 inline-flex items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg"
+                className="mt-6 inline-flex items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg relative touch-target"
               >
                 Watch on YouTube
                 <ExternalLink className="size-4" aria-hidden="true" />
@@ -307,7 +307,7 @@ export default async function EducationResource({
                   href={resource.external_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-6 inline-flex items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg"
+                  className="mt-6 inline-flex items-center gap-2 rounded-shamba border border-shamba-line px-4 py-2 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg relative touch-target"
                 >
                   {resource.education_sources?.name
                     ? `Read on ${resource.education_sources.name}`
@@ -376,7 +376,7 @@ export default async function EducationResource({
 
         <Link
           href="/education"
-          className="mt-8 inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+          className="mt-8 inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink relative touch-target"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
           Back to Education

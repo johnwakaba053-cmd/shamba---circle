@@ -99,7 +99,7 @@ export function MediaViewer({
           type="button"
           onClick={requestClose}
           aria-label="Close media viewer"
-          className="inline-flex size-9 items-center justify-center rounded-full bg-white/10 text-shamba-card transition-colors hover:bg-white/20"
+          className="inline-flex size-9 items-center justify-center rounded-full bg-white/10 text-shamba-card transition-colors hover:bg-white/20 relative touch-target"
         >
           <X className="size-5" aria-hidden="true" />
         </button>
@@ -138,7 +138,7 @@ export function MediaViewer({
             onClick={() => scrollToIndex(activeIndex - 1)}
             disabled={activeIndex === 0}
             aria-label="Previous photo or video"
-            className="absolute left-2 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-white/10 p-2 text-shamba-card transition-opacity hover:bg-white/20 disabled:opacity-0 sm:flex"
+            className="absolute left-2 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-white/10 p-2 text-shamba-card transition-opacity hover:bg-white/20 disabled:opacity-0 sm:flex touch-target"
           >
             <ChevronLeft className="size-6" aria-hidden="true" />
           </button>
@@ -147,7 +147,7 @@ export function MediaViewer({
             onClick={() => scrollToIndex(activeIndex + 1)}
             disabled={activeIndex === items.length - 1}
             aria-label="Next photo or video"
-            className="absolute right-2 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-white/10 p-2 text-shamba-card transition-opacity hover:bg-white/20 disabled:opacity-0 sm:flex"
+            className="absolute right-2 top-1/2 hidden -translate-y-1/2 items-center justify-center rounded-full bg-white/10 p-2 text-shamba-card transition-opacity hover:bg-white/20 disabled:opacity-0 sm:flex touch-target"
           >
             <ChevronRight className="size-6" aria-hidden="true" />
           </button>

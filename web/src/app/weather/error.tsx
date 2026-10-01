@@ -24,7 +24,7 @@ export default function WeatherError({
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
       <header className="mx-auto flex w-full max-w-5xl px-4 pt-4 sm:px-10 sm:pt-6">
-        <Link href="/communities" className="flex items-center gap-2">
+        <Link href="/communities" className="flex items-center gap-2 relative touch-target">
           <Sprout className="size-6 text-shamba-green" aria-hidden="true" />
           <span className="font-display text-lg font-medium tracking-tight text-shamba-ink">
             Shamba Space

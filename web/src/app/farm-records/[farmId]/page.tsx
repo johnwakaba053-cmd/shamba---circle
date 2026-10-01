@@ -66,7 +66,7 @@ export default async function FarmDetail({
         <div className="w-full max-w-sm">
           <Link
             href="/farm-records"
-            className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+            className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink relative touch-target"
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
             Back to Farm Records

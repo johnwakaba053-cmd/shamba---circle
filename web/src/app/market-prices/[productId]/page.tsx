@@ -107,7 +107,7 @@ export default async function ProductPriceHistory({
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
         <Link
           href="/market-prices"
-          className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+          className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink relative touch-target"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
           Back to Market Prices
