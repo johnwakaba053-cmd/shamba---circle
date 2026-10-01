@@ -11,6 +11,7 @@ import {
   formatAcres,
   tenureLabel,
   todayInKenya,
+  type CategoryOption,
   type CropSeason,
   type Farm,
   type FarmPlot,
@@ -48,6 +49,8 @@ export default async function FarmDetail({
     { data: groupsData },
     { data: cropTypesData },
     { data: livestockTypesData },
+    { data: cropCategoriesData },
+    { data: livestockCategoriesData },
   ] = await Promise.all([
     supabase.from("farms").select(FARM_COLUMNS).eq("id", farmId).eq("profile_id", user.id).maybeSingle(),
     supabase
@@ -68,8 +71,10 @@ export default async function FarmDetail({
       .eq("farm_id", farmId)
       .eq("profile_id", user.id)
       .order("created_at", { ascending: true }),
-    supabase.from("crop_types").select("id, name").order("name", { ascending: true }),
-    supabase.from("livestock_types").select("id, name").order("name", { ascending: true }),
+    supabase.from("crop_types").select("id, name, category_id").order("name", { ascending: true }),
+    supabase.from("livestock_types").select("id, name, category_id").order("name", { ascending: true }),
+    supabase.from("crop_categories").select("id, name").order("sort_order", { ascending: true }),
+    supabase.from("livestock_categories").select("id, name").order("sort_order", { ascending: true }),
   ]);
 
   if (!farmData) {
@@ -82,6 +87,8 @@ export default async function FarmDetail({
   const groups = (groupsData ?? []) as LivestockGroup[];
   const cropTypes = (cropTypesData ?? []) as TypeOption[];
   const livestockTypes = (livestockTypesData ?? []) as TypeOption[];
+  const cropCategories = (cropCategoriesData ?? []) as CategoryOption[];
+  const livestockCategories = (livestockCategoriesData ?? []) as CategoryOption[];
   const isArchived = farm.archived_at !== null;
   // One "today" (Kenya time) for the whole render, so crop and livestock
   // states are worked out the same way on the server and in the browser.
@@ -159,6 +166,7 @@ export default async function FarmDetail({
             seasons={seasons}
             plots={plots}
             cropTypes={cropTypes}
+            cropCategories={cropCategories}
             farmArchived={isArchived}
             today={today}
           />
@@ -168,6 +176,7 @@ export default async function FarmDetail({
             groups={groups}
             plots={plots}
             livestockTypes={livestockTypes}
+            livestockCategories={livestockCategories}
             farmArchived={isArchived}
             today={today}
           />

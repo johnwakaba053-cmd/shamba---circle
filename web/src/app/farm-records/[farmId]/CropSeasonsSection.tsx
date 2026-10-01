@@ -15,6 +15,7 @@ import {
   parseAcres,
   parseRecordDate,
   todayInKenya,
+  type CategoryOption,
   type CropSeason,
   type FarmPlot,
   type TypeOption,
@@ -27,6 +28,7 @@ import {
   Optional,
   PlotSelect,
   RecordArchiveButton,
+  TypeSelect,
   plotLabel,
   type Status,
 } from "./recordParts";
@@ -48,6 +50,7 @@ export function CropSeasonsSection({
   seasons,
   plots,
   cropTypes,
+  cropCategories,
   farmArchived,
   today,
 }: {
@@ -55,6 +58,7 @@ export function CropSeasonsSection({
   seasons: CropSeason[];
   plots: FarmPlot[];
   cropTypes: TypeOption[];
+  cropCategories: CategoryOption[];
   farmArchived: boolean;
   today: string;
 }) {
@@ -79,6 +83,7 @@ export function CropSeasonsSection({
           season={season}
           plots={plots}
           cropTypes={cropTypes}
+          cropCategories={cropCategories}
           onDone={() => setEditingId(null)}
         />
       </li>
@@ -145,7 +150,13 @@ export function CropSeasonsSection({
       {!farmArchived &&
         (adding ? (
           <div className="mt-3 border-t border-shamba-line pt-3">
-            <CropSeasonForm farmId={farmId} plots={plots} cropTypes={cropTypes} onDone={() => setAdding(false)} />
+            <CropSeasonForm
+              farmId={farmId}
+              plots={plots}
+              cropTypes={cropTypes}
+              cropCategories={cropCategories}
+              onDone={() => setAdding(false)}
+            />
           </div>
         ) : (
           <button
@@ -240,12 +251,14 @@ function CropSeasonForm({
   season,
   plots,
   cropTypes,
+  cropCategories,
   onDone,
 }: {
   farmId: string;
   season?: CropSeason;
   plots: FarmPlot[];
   cropTypes: TypeOption[];
+  cropCategories: CategoryOption[];
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -332,22 +345,16 @@ function CropSeasonForm({
         <label htmlFor={`${idPrefix}-type`} className={LABEL_CLASS}>
           Crop
         </label>
-        <select
+        <TypeSelect
           id={`${idPrefix}-type`}
           value={cropTypeId}
-          onChange={(event) => setCropTypeId(event.target.value)}
-          required
-          autoFocus
+          onChange={setCropTypeId}
+          types={cropTypes}
+          categories={cropCategories}
+          placeholder="Choose a crop"
           disabled={isLoading}
-          className={INPUT_CLASS}
-        >
-          <option value="">Choose a crop</option>
-          {cropTypes.map((type) => (
-            <option key={type.id} value={type.id}>
-              {type.name}
-            </option>
-          ))}
-        </select>
+          autoFocus
+        />
       </div>
 
       <div className="flex flex-col gap-2">

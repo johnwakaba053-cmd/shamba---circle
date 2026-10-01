@@ -94,7 +94,31 @@ export const MAX_HEAD_COUNT = 1000000;
 export const MIN_RECORD_DATE = "1900-01-01";
 export const MAX_RECORD_DATE = "2100-12-31";
 
-export type TypeOption = { id: string; name: string };
+// A crop or livestock type and the category it belongs to (R3a:
+// crop_types.category_id -> crop_categories, livestock_types.category_id ->
+// livestock_categories). Both lists are loaded from Supabase.
+export type TypeOption = { id: string; name: string; category_id: string };
+export type CategoryOption = { id: string; name: string };
+
+export type TypeGroup = { category: CategoryOption; types: TypeOption[] };
+
+// Types grouped under their categories for a picker. Categories keep the
+// order they were loaded in (their sort_order); types within a category
+// keep theirs (by name). A type whose category isn't in the list -- which
+// the database doesn't allow, but a stale page could see -- still shows,
+// under "Other", so an existing record's type is never hidden.
+export function groupTypesByCategory(types: TypeOption[], categories: CategoryOption[]): TypeGroup[] {
+  const groups: TypeGroup[] = categories
+    .map((category) => ({ category, types: types.filter((type) => type.category_id === category.id) }))
+    .filter((group) => group.types.length > 0);
+
+  const known = new Set(categories.map((category) => category.id));
+  const orphans = types.filter((type) => !known.has(type.category_id));
+  if (orphans.length > 0) {
+    groups.push({ category: { id: "other", name: "Other" }, types: orphans });
+  }
+  return groups;
+}
 
 export type CropSeason = {
   id: string;

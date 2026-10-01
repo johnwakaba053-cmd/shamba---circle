@@ -13,6 +13,7 @@ import {
   livestockStartLabel,
   parseHeadCount,
   parseRecordDate,
+  type CategoryOption,
   type FarmPlot,
   type LivestockGroup,
   type TypeOption,
@@ -25,6 +26,7 @@ import {
   Optional,
   PlotSelect,
   RecordArchiveButton,
+  TypeSelect,
   plotLabel,
   type Status,
 } from "./recordParts";
@@ -41,6 +43,7 @@ export function LivestockSection({
   groups,
   plots,
   livestockTypes,
+  livestockCategories,
   farmArchived,
   today,
 }: {
@@ -48,6 +51,7 @@ export function LivestockSection({
   groups: LivestockGroup[];
   plots: FarmPlot[];
   livestockTypes: TypeOption[];
+  livestockCategories: CategoryOption[];
   farmArchived: boolean;
   today: string;
 }) {
@@ -80,6 +84,7 @@ export function LivestockSection({
                   group={group}
                   plots={plots}
                   livestockTypes={livestockTypes}
+                  livestockCategories={livestockCategories}
                   onDone={() => setEditingId(null)}
                 />
               </li>
@@ -121,6 +126,7 @@ export function LivestockSection({
               farmId={farmId}
               plots={plots}
               livestockTypes={livestockTypes}
+              livestockCategories={livestockCategories}
               onDone={() => setAdding(false)}
             />
           </div>
@@ -204,12 +210,14 @@ function LivestockGroupForm({
   group,
   plots,
   livestockTypes,
+  livestockCategories,
   onDone,
 }: {
   farmId: string;
   group?: LivestockGroup;
   plots: FarmPlot[];
   livestockTypes: TypeOption[];
+  livestockCategories: CategoryOption[];
   onDone: () => void;
 }) {
   const router = useRouter();
@@ -303,22 +311,16 @@ function LivestockGroupForm({
         <label htmlFor={`${idPrefix}-type`} className={LABEL_CLASS}>
           Type of livestock
         </label>
-        <select
+        <TypeSelect
           id={`${idPrefix}-type`}
           value={typeId}
-          onChange={(event) => handleTypeChange(event.target.value)}
-          required
-          autoFocus
+          onChange={handleTypeChange}
+          types={livestockTypes}
+          categories={livestockCategories}
+          placeholder="Choose a type"
           disabled={isLoading}
-          className={INPUT_CLASS}
-        >
-          <option value="">Choose a type</option>
-          {livestockTypes.map((type) => (
-            <option key={type.id} value={type.id}>
-              {type.name}
-            </option>
-          ))}
-        </select>
+          autoFocus
+        />
       </div>
 
       <div className="flex flex-col gap-2">

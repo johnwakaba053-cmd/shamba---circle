@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { farmRecordErrorMessage, type FarmPlot } from "@/lib/farmRecords";
+import {
+  farmRecordErrorMessage,
+  groupTypesByCategory,
+  type CategoryOption,
+  type FarmPlot,
+  type TypeOption,
+} from "@/lib/farmRecords";
 
 // Shared pieces of the Crops and Livestock sections on the farm page.
 // They follow PlotsSection's patterns exactly (same input style, inline
@@ -56,6 +62,55 @@ export function PlotSelect({
         ))}
       </select>
     </div>
+  );
+}
+
+// The crop or livestock type picker: one native dropdown with the types
+// grouped under their category headings (Cereals -> Maize, Rice, ...), so
+// a long list stays scannable and Android shows its own picker. The
+// caller keeps its label (so htmlFor/id still pair up) and its value.
+export function TypeSelect({
+  id,
+  value,
+  onChange,
+  types,
+  categories,
+  placeholder,
+  disabled,
+  autoFocus = false,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  types: TypeOption[];
+  categories: CategoryOption[];
+  placeholder: string;
+  disabled: boolean;
+  autoFocus?: boolean;
+}) {
+  const groups = groupTypesByCategory(types, categories);
+
+  return (
+    <select
+      id={id}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      required
+      autoFocus={autoFocus}
+      disabled={disabled}
+      className={INPUT_CLASS}
+    >
+      <option value="">{placeholder}</option>
+      {groups.map((group) => (
+        <optgroup key={group.category.id} label={group.category.name}>
+          {group.types.map((type) => (
+            <option key={type.id} value={type.id}>
+              {type.name}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </select>
   );
 }
 
