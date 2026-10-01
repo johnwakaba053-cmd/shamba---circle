@@ -4,14 +4,22 @@ import { ArrowLeft, MapPin, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import {
+  CROP_SEASON_COLUMNS,
   FARM_COLUMNS,
+  LIVESTOCK_GROUP_COLUMNS,
   PLOT_COLUMNS,
   formatAcres,
   tenureLabel,
+  todayInKenya,
+  type CropSeason,
   type Farm,
   type FarmPlot,
+  type LivestockGroup,
+  type TypeOption,
 } from "@/lib/farmRecords";
+import { CropSeasonsSection } from "./CropSeasonsSection";
 import { FarmArchiveControl } from "./FarmArchiveControl";
+import { LivestockSection } from "./LivestockSection";
 import { PlotsSection } from "./PlotsSection";
 
 export default async function FarmDetail({
@@ -33,7 +41,14 @@ export default async function FarmDetail({
   // RLS returns only the caller's own farm and plots: anyone else's farm
   // id (or a malformed one) is simply not found, never "forbidden", so
   // the page doesn't even confirm that the farm exists.
-  const [{ data: farmData }, { data: plotsData }] = await Promise.all([
+  const [
+    { data: farmData },
+    { data: plotsData },
+    { data: seasonsData },
+    { data: groupsData },
+    { data: cropTypesData },
+    { data: livestockTypesData },
+  ] = await Promise.all([
     supabase.from("farms").select(FARM_COLUMNS).eq("id", farmId).eq("profile_id", user.id).maybeSingle(),
     supabase
       .from("farm_plots")
@@ -41,6 +56,20 @@ export default async function FarmDetail({
       .eq("farm_id", farmId)
       .eq("profile_id", user.id)
       .order("created_at", { ascending: true }),
+    supabase
+      .from("crop_seasons")
+      .select(CROP_SEASON_COLUMNS)
+      .eq("farm_id", farmId)
+      .eq("profile_id", user.id)
+      .order("started_on", { ascending: false }),
+    supabase
+      .from("livestock_groups")
+      .select(LIVESTOCK_GROUP_COLUMNS)
+      .eq("farm_id", farmId)
+      .eq("profile_id", user.id)
+      .order("created_at", { ascending: true }),
+    supabase.from("crop_types").select("id, name").order("name", { ascending: true }),
+    supabase.from("livestock_types").select("id, name").order("name", { ascending: true }),
   ]);
 
   if (!farmData) {
@@ -49,7 +78,14 @@ export default async function FarmDetail({
 
   const farm = farmData as Farm;
   const plots = (plotsData ?? []) as FarmPlot[];
+  const seasons = (seasonsData ?? []) as CropSeason[];
+  const groups = (groupsData ?? []) as LivestockGroup[];
+  const cropTypes = (cropTypesData ?? []) as TypeOption[];
+  const livestockTypes = (livestockTypesData ?? []) as TypeOption[];
   const isArchived = farm.archived_at !== null;
+  // One "today" (Kenya time) for the whole render, so crop and livestock
+  // states are worked out the same way on the server and in the browser.
+  const today = todayInKenya();
 
   const { data: county } = await supabase.from("counties").select("name").eq("id", farm.county_id).maybeSingle();
 
@@ -117,6 +153,24 @@ export default async function FarmDetail({
           </div>
 
           <PlotsSection farmId={farm.id} plots={plots} farmArchived={isArchived} />
+
+          <CropSeasonsSection
+            farmId={farm.id}
+            seasons={seasons}
+            plots={plots}
+            cropTypes={cropTypes}
+            farmArchived={isArchived}
+            today={today}
+          />
+
+          <LivestockSection
+            farmId={farm.id}
+            groups={groups}
+            plots={plots}
+            livestockTypes={livestockTypes}
+            farmArchived={isArchived}
+            today={today}
+          />
         </div>
       </main>
     </div>
