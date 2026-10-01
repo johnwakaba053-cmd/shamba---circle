@@ -61,6 +61,11 @@ export function AppHeader() {
             Communities
           </NavLink>
 
+          <NavLink href="/farm-records">
+            <ClipboardList className="size-4" aria-hidden="true" />
+            Farm Records
+          </NavLink>
+
           <NavLink href="/feed">
             <Clapperboard className="size-4" aria-hidden="true" />
             Farming Reels
@@ -79,11 +84,6 @@ export function AppHeader() {
           <NavLink href="/messages">
             <MessageCircle className="size-4" aria-hidden="true" />
             Messages
-          </NavLink>
-
-          <NavLink href="/farm-records">
-            <ClipboardList className="size-4" aria-hidden="true" />
-            Farm Records
           </NavLink>
 
           <NavLink href="/market-prices">
