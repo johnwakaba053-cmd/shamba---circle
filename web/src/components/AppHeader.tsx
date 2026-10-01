@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   BookOpen,
   Clapperboard,
+  ClipboardList,
   CloudSun,
   MessageCircle,
   Sprout,
@@ -78,6 +79,11 @@ export function AppHeader() {
           <NavLink href="/messages">
             <MessageCircle className="size-4" aria-hidden="true" />
             Messages
+          </NavLink>
+
+          <NavLink href="/farm-records">
+            <ClipboardList className="size-4" aria-hidden="true" />
+            Farm Records
           </NavLink>
 
           <NavLink href="/market-prices">
