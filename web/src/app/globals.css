@@ -62,3 +62,32 @@ body {
   color: var(--shamba-ink);
   font-family: var(--font-sans);
 }
+
+/*
+ * Keyboard focus for buttons and control-shaped links, matching the green
+ * ring form fields use. In the base layer with zero-specificity :where(),
+ * so any component's own focus utilities (the header's inset ring, the
+ * inputs' focus:ring-2) still win. Plain inline text links are not
+ * targeted -- only links drawn as a control (a `rounded-*` class: button
+ * links, linked cards, icon links).
+ *
+ * Controls drawn in Card Cream over photos, video or dark viewers (their
+ * own bg-black/* scrim, or cream text on no fill of their own) take a
+ * Card Cream outline instead, since green is too dark to see there.
+ */
+@layer base {
+  :where(button, [role="button"], summary, a[class*="rounded-"]):focus-visible {
+    outline: 2px solid var(--shamba-green);
+    outline-offset: 2px;
+  }
+
+  :where(button, [role="button"], a)[class*="bg-black/"]:focus-visible,
+  :where(button, [role="button"], a)[class*="text-shamba-card"]:not(
+      [class*="bg-shamba-green"],
+      [class*="bg-shamba-rust"],
+      [class*="bg-shamba-blue"],
+      [class*="bg-shamba-ochre"]
+    ):focus-visible {
+    outline-color: var(--shamba-card);
+  }
+}
