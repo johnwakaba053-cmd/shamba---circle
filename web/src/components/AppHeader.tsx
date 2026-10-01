@@ -29,32 +29,38 @@ import { SignOutButton } from "./SignOutButton";
 // Messages and the rest. On phones that row scrolls sideways instead of
 // wrapping (a fade on the right edge shows there's more), and Profile /
 // Sign out sit at its end since the top row has no room for them.
+//
+// Gutters: px-6 / sm:px-10 matches the <main> of the pages below it, so
+// the Sprout mark, the first tab's label and page content share one left
+// edge. Every item is a 44px-tall target with px-2 of its own; the -mx-2
+// / pl-4 offsets cancel that padding so labels (not hit areas) align.
 export function AppHeader() {
   return (
-    <header className="mx-auto flex w-full max-w-5xl flex-col gap-2 px-4 pt-4 pb-2 sm:gap-3 sm:px-10 sm:pt-6 sm:pb-3">
+    <header className="mx-auto flex w-full max-w-5xl flex-col gap-1 px-6 pt-2 sm:gap-2 sm:px-10 sm:pt-4">
       <div className="flex items-center justify-between gap-2">
-        <Link href="/communities" className="flex items-center gap-2">
+        <Link
+          href="/communities"
+          className="-ml-2 inline-flex min-h-11 items-center gap-2 rounded-shamba px-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-shamba-green"
+        >
           <Sprout className="size-6 text-shamba-green" aria-hidden="true" />
           <span className="font-display text-lg font-medium tracking-tight text-shamba-ink">
             Shamba Space
           </span>
         </Link>
 
-        <div className="flex items-center gap-6">
+        <div className="-mr-2 flex items-center">
           <NotificationBell />
           <span className="hidden sm:contents">
             <ProfileNavLink />
-            <span className="pb-1">
-              <SignOutButton />
-            </span>
+            <SignOutButton />
           </span>
         </div>
       </div>
 
-      <div className="relative -mx-4 sm:mx-0">
+      <div className="relative -mx-6 border-b border-shamba-line sm:mx-0">
         <nav
           aria-label="Main"
-          className="flex items-center gap-5 overflow-x-auto whitespace-nowrap border-b border-shamba-line pl-4 pr-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:gap-x-6 sm:gap-y-1 sm:overflow-visible sm:px-0"
+          className="flex items-center overflow-x-auto whitespace-nowrap scroll-pl-4 scroll-pr-10 pl-4 pr-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-2 sm:flex-wrap sm:overflow-visible sm:px-0"
         >
           <NavLink href="/communities">
             <Users className="size-4" aria-hidden="true" />
@@ -98,9 +104,7 @@ export function AppHeader() {
 
           <span className="contents sm:hidden">
             <ProfileNavLink />
-            <span className="pb-1">
-              <SignOutButton />
-            </span>
+            <SignOutButton />
           </span>
         </nav>
 

@@ -44,7 +44,7 @@ export async function NotificationBell() {
       {unreadCount > 0 && (
         <span
           aria-hidden="true"
-          className="inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-shamba-rust px-1 py-0.5 font-mono text-[10px] font-bold leading-none text-shamba-card"
+          className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-shamba-rust px-1.5 font-mono text-xs font-bold leading-none text-shamba-card"
         >
           {displayCount}
         </span>

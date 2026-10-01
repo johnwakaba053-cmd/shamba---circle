@@ -24,8 +24,10 @@ export function SignOutButton() {
     <button
       type="button"
       onClick={handleSignOut}
+      // Last item of the phone nav strip: keep it fully in view on focus.
+      onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
       disabled={isLoading}
-      className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-rust disabled:cursor-not-allowed disabled:opacity-70"
+      className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-shamba px-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-rust focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-shamba-green disabled:cursor-not-allowed disabled:opacity-70"
     >
       {isLoading ? (
         <Loader2 className="size-4 animate-spin" aria-hidden="true" />
