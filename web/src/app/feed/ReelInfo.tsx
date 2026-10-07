@@ -6,15 +6,16 @@ import { Rss, Tag, UserRound } from "lucide-react";
 import type { Reel } from "./types";
 import { ReelDeleteControl } from "./ReelDeleteControl";
 import { ReelShareButton } from "./ReelShareButton";
+import { ReportButton } from "@/components/ReportButton";
 
 // Bottom-left info block -- author, farming/community context, optional
-// topic badge, caption, optional hashtags, optional mentions, own-post
-// delete. No profile-picture upload exists in this codebase
-// (public.profiles has no such column, and the public profile page
-// itself falls back to a generic icon), so this stage uses the same
-// generic-icon fallback rather than building avatar upload. The topic
-// badge only renders when reel.topic is set -- choosing one is
-// optional, so most Reels won't show it.
+// topic badge, caption, optional hashtags, optional mentions, and Delete
+// on your own Reel or Report on anyone else's. No profile-picture upload
+// exists in this codebase (public.profiles has no such column, and the
+// public profile page itself falls back to a generic icon), so this
+// stage uses the same generic-icon fallback rather than building avatar
+// upload. The topic badge only renders when reel.topic is set --
+// choosing one is optional, so most Reels won't show it.
 const CAPTION_PREVIEW_CHARS = 140;
 
 // Mentions are rendered as a separate list resolved from the
@@ -139,11 +140,13 @@ export function ReelInfo({ reel, hideCaption = false }: { reel: Reel; hideCaptio
         </div>
       )}
 
-      {reel.isAuthor && (
-        <div className="mt-2">
+      <div className="mt-2">
+        {reel.isAuthor ? (
           <ReelDeleteControl postId={reel.id} />
-        </div>
-      )}
+        ) : (
+          <ReportButton targetType="post" targetId={reel.id} variant="overlay" />
+        )}
+      </div>
     </div>
   );
 }

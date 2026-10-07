@@ -4,6 +4,7 @@ import { ArrowLeft, UserRound } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { ProfileLink } from "@/components/ProfileLink";
+import { ReportButton } from "@/components/ReportButton";
 import { formatDaySeparator, formatMessageTime, isSameDay } from "@/lib/formatMessageTime";
 import { MembershipControl } from "./MembershipControl";
 import { PostComposer } from "./PostComposer";
@@ -303,6 +304,11 @@ export default async function CommunityDetail({
                             postId={post.id}
                             isAuthor={post.profile_id === user.id}
                           />
+                          {post.profile_id !== user.id && (
+                            <div className="mt-2">
+                              <ReportButton targetType="post" targetId={post.id} />
+                            </div>
+                          )}
 
                           <div className="flex flex-wrap items-start gap-4">
                             <PostLikeControl

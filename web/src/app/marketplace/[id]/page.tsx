@@ -6,6 +6,7 @@ import { fetchListingMediaByListingId } from "@/lib/listingMedia";
 import { getFilledCategoryDetailFields, type CategoryDetails } from "@/lib/marketplaceCategoryFields";
 import { AppHeader } from "@/components/AppHeader";
 import { ProfileLink } from "@/components/ProfileLink";
+import { ReportButton } from "@/components/ReportButton";
 import { ListingGallery } from "./ListingGallery";
 import { DeleteListingControl } from "./DeleteListingControl";
 import { ListingStatusControl } from "./ListingStatusControl";
@@ -197,6 +198,11 @@ export default async function ListingDetail({
             </p>
             {/* A "Contact seller" action belongs here once a messaging
                 subsystem exists -- not part of this stage. */}
+            {!isOwner && (
+              <div className="mt-3">
+                <ReportButton targetType="listing" targetId={typedListing.id} label="Report listing" />
+              </div>
+            )}
           </div>
 
           {/* Only the owner ever sees this block at all -- gated here,

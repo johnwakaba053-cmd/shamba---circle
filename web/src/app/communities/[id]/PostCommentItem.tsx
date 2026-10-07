@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { ProfileLink } from "@/components/ProfileLink";
+import { ReportButton } from "@/components/ReportButton";
 
 const MAX_BODY_LENGTH = 2000;
 
@@ -209,6 +210,12 @@ export function PostCommentItem({
           />{" "}
           <span className="text-shamba-ink-soft">{body}</span>
         </div>
+
+        {!isAuthor && (
+          <div className="flex shrink-0 items-center">
+            <ReportButton targetType="comment" targetId={commentId} />
+          </div>
+        )}
 
         {isAuthor && (
           <div className="flex shrink-0 items-center gap-2">

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { VideoMuteButton } from "@/components/VideoMuteButton";
+import { ReportButton } from "@/components/ReportButton";
 import { useBackToClose } from "@/lib/useBackToClose";
 import { fetchCreatorActiveStories, type ActiveStory, type StoryDetail } from "./stories";
 
@@ -76,6 +77,11 @@ export function StoryViewer({
   // available to retry) until the user explicitly cancels or a delete
   // actually succeeds, so navigation stays blocked for all three.
   const isDeleteOverlayOpen = deleteStatus.kind !== "idle";
+  // True while the Report sheet is open for the current Story: the Story
+  // is held in place (no auto-advance, tap or arrow navigation, video
+  // paused, progress bar reset) so the report is always about the Story
+  // the farmer was looking at.
+  const [isReporting, setIsReporting] = useState(false);
 
   // Fetched once on mount, purely to decide whether *this* viewer sees
   // a delete control at all -- the real security boundary is
@@ -146,8 +152,8 @@ export function StoryViewer({
     // Blocked while a delete confirmation/attempt is in progress -- an
     // auto-advance or tap-zone navigation firing mid-confirmation would
     // yank the confirm UI out from under the user, or navigate away
-    // during the delete call itself.
-    if (!stories || isDeleteOverlayOpen) return;
+    // during the delete call itself. Likewise while a report is open.
+    if (!stories || isDeleteOverlayOpen || isReporting) return;
     if (storyIndex < stories.length - 1) {
       setStoryIndex((index) => index + 1);
       setCaptionExpanded(false);
@@ -157,7 +163,7 @@ export function StoryViewer({
   }
 
   function goToPrevious() {
-    if (!stories || isDeleteOverlayOpen) return;
+    if (!stories || isDeleteOverlayOpen || isReporting) return;
     if (storyIndex > 0) {
       setStoryIndex((index) => index - 1);
       setCaptionExpanded(false);
@@ -169,13 +175,14 @@ export function StoryViewer({
   // Auto-advance for image Stories -- a plain timeout, reset whenever
   // the active Story changes (including manual navigation, since that
   // changes currentStory.id too). Video Stories advance from onEnded
-  // below instead; no timer runs for them.
+  // below instead; no timer runs for them. No timer while a report is
+  // open; closing it starts the Story's full duration again.
   useEffect(() => {
-    if (!currentStory || currentStory.mediaType !== "image") return;
+    if (!currentStory || currentStory.mediaType !== "image" || isReporting) return;
     const timeoutId = setTimeout(goToNext, IMAGE_STORY_DURATION_MS);
     return () => clearTimeout(timeoutId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStory?.id]);
+  }, [currentStory?.id, isReporting]);
 
   // Records exactly one view per "this Story is now the one being
   // shown" transition -- keyed on currentStory.id, same as the
@@ -213,11 +220,24 @@ export function StoryViewer({
   // browser actually animates the change instead of jumping straight to
   // 100%.
   useEffect(() => {
-    if (!currentStory || currentStory.mediaType !== "image") return;
+    if (!currentStory || currentStory.mediaType !== "image" || isReporting) return;
     const rafId = requestAnimationFrame(() => setFillStarted(true));
     return () => cancelAnimationFrame(rafId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStory?.id, currentStory?.mediaType]);
+  }, [currentStory?.id, currentStory?.mediaType, isReporting]);
+
+  function handleReportOpenChange(open: boolean) {
+    setIsReporting(open);
+    if (open) {
+      setFillStarted(false);
+      videoRef.current?.pause();
+    } else {
+      videoRef.current?.play().catch(() => {});
+      // Focus went to the Report sheet; give it back so Escape and the
+      // arrow keys work on the viewer again.
+      dialogRef.current?.focus();
+    }
+  }
 
   function handleDialogKeyDown(event: React.KeyboardEvent) {
     if (event.key === "Escape") {
@@ -413,6 +433,17 @@ export function StoryViewer({
                   >
                     <Trash2 className="size-4" aria-hidden="true" />
                   </button>
+                )}
+                {/* Only once the viewer is known, so it never flashes on
+                    the farmer's own Story before that check resolves. */}
+                {viewerProfileId !== null && !isOwnStory && (
+                  <ReportButton
+                    key={currentStory.id}
+                    targetType="story"
+                    targetId={currentStory.id}
+                    variant="overlay-icon"
+                    onOpenChange={handleReportOpenChange}
+                  />
                 )}
                 <button
                   type="button"

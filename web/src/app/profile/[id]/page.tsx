@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { ProfileFollowControl } from "./ProfileFollowControl";
 import { MessageActionButton } from "@/components/MessageActionButton";
+import { ReportButton } from "@/components/ReportButton";
 import { ROLE_LABELS } from "@/lib/roles";
 import { ProfilePostGrid } from "../ProfilePostGrid";
 import { fetchProfileReels } from "../profilePosts";
@@ -114,6 +115,11 @@ export default async function PublicProfile({
               <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
                 This farmer has chosen to keep their profile private.
               </p>
+              {!isOwnProfile && (
+                <div className="mt-4">
+                  <ReportButton targetType="profile" targetId={id} label="Report profile" />
+                </div>
+              )}
             </>
           )}
 
@@ -152,6 +158,12 @@ export default async function PublicProfile({
                 <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
                   <ProfileFollowControl profileId={id} initialFollowing={isFollowing} />
                   <MessageActionButton profileId={id} />
+                </div>
+              )}
+
+              {!isOwnProfile && (
+                <div className="mt-3">
+                  <ReportButton targetType="profile" targetId={id} label="Report profile" />
                 </div>
               )}
 

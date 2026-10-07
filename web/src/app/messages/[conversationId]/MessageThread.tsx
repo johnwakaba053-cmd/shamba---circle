@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { formatDaySeparator, formatMessageTime, isSameDay } from "@/lib/formatMessageTime";
 import type { MessageRow } from "@/lib/messaging";
 import { CommunityConversation } from "@/app/communities/[id]/CommunityConversation";
+import { ReportButton } from "@/components/ReportButton";
 
 const MAX_BODY_LENGTH = 2000;
 
@@ -258,6 +259,12 @@ export function MessageThread({
                                 <Trash2 className="size-3.5" aria-hidden="true" />
                               )}
                             </button>
+                          )}
+                          {/* Only this conversation's two participants
+                              can see this thread, and report_content()
+                              re-checks participation server-side. */}
+                          {!isMine && (
+                            <ReportButton targetType="message" targetId={message.id} variant="icon" />
                           )}
                         </div>
                       </div>
