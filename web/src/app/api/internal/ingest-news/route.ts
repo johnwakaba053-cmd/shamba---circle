@@ -8,10 +8,12 @@ import { runNewsIngest } from "@/lib/newsIngest/ingest";
 //   {"dryRun": true}        fetch and sort every active feed, log the run,
 //                           write no articles (N6b)
 //   {"importDrafts": true}  the same, then create each new item as a
-//                           DRAFT article via import_news_draft (N6c).
-//                           Nothing is ever published here.
-// Anything else is refused. There is no GET/cron path yet (the scheduler
-// comes later).
+//                           DRAFT article via import_news_draft (N6c)
+//   {"autoPublish": true}   the same, then publish each new draft that is
+//                           clear-cut; questionable ones stay drafts
+//                           (ingest.ts, mode "auto")
+// Exactly one mode, else 400. Add "trigger": "cron" when the Supabase
+// scheduler (pg_cron, every minute) is calling. There is no GET path.
 //
 // Same secret check as /api/internal/ingest-kamis-prices. Never called
 // from browser code; INGEST_SECRET and the service-role key stay
@@ -40,19 +42,25 @@ export async function POST(request: Request) {
     body = null;
   }
 
-  const dryRun = body?.dryRun === true;
-  const importDrafts = body?.importDrafts === true;
-  if (dryRun === importDrafts) {
+  const modes = [
+    body?.dryRun === true ? ("dry_run" as const) : null,
+    body?.importDrafts === true ? ("draft" as const) : null,
+    body?.autoPublish === true ? ("auto" as const) : null,
+  ].filter((mode) => mode !== null);
+  if (modes.length !== 1) {
     return NextResponse.json(
-      { error: "choose_one_mode", message: 'Send {"dryRun": true} or {"importDrafts": true}.' },
+      {
+        error: "choose_one_mode",
+        message: 'Send exactly one of {"dryRun": true}, {"importDrafts": true} or {"autoPublish": true}.',
+      },
       { status: 400 },
     );
   }
 
   try {
     const report = await runNewsIngest(createAdminClient(), {
-      triggeredBy: "manual",
-      mode: importDrafts ? "draft" : "dry_run",
+      triggeredBy: body?.trigger === "cron" ? "cron" : "manual",
+      mode: modes[0],
     });
     return NextResponse.json(report);
   } catch {

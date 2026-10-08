@@ -98,6 +98,23 @@ export function titleKey(title: string): string {
     .trim();
 }
 
+// Whether two headlines (titleKey form) are the same story told almost
+// the same way: identical, one containing the other ("... SUMMIT 2026" /
+// "... SUMMIT 2026 #AFSS"), or sharing at least 80% of their words. Used
+// to hold a new item for review, never to drop it.
+export function similarHeadline(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  if (shorter.length >= 20 && longer.includes(shorter)) return true;
+  const wordsA = new Set(a.split(" "));
+  const wordsB = new Set(b.split(" "));
+  if (wordsA.size < 4 || wordsB.size < 4) return false;
+  let shared = 0;
+  for (const word of wordsA) if (wordsB.has(word)) shared += 1;
+  return shared / (wordsA.size + wordsB.size - shared) >= 0.8;
+}
+
 export function parseFeedDate(value: unknown): Date | null {
   if (typeof value !== "string" || !value.trim()) return null;
   const time = Date.parse(value.trim());

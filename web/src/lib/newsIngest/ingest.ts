@@ -16,11 +16,12 @@ import {
 import { draftSlug, draftSummary } from "./draftText";
 import { fetchFeed } from "./fetchFeed";
 import { parseFeed } from "./parseFeed";
-import { assessRelevance, type RelevanceMode } from "./relevance";
+import { assessRelevance, autoPublishBlocker, type RelevanceMode } from "./relevance";
 import {
   articleExternalRef,
   canonicalArticleUrl,
   parseFeedDate,
+  similarHeadline,
   titleKey,
   toPlainText,
   truncate,
@@ -43,11 +44,27 @@ import {
 //
 // mode "dry_run" only reports: it never writes news_articles and never
 // touches news_feeds' fetch state. mode "draft" also creates each new item
-// as a DRAFT through import_news_draft() (N6c) -- never published -- with
-// a short original summary (draftText.ts), and records each feed's fetch
-// state. Uses the service-role client: server-only.
+// as a DRAFT through import_news_draft() (N6c) with a short original
+// summary (draftText.ts), and records each feed's fetch state. mode "auto"
+// (the every-minute scheduler) does the same, then publishes each new
+// draft that is clear-cut (autoPublishBlocker, no similar recent headline,
+// and the database's own readiness check in auto_publish_news_draft);
+// anything questionable stays a draft for an admin.
+//
+// Real runs send each feed's ETag / Last-Modified, so an unchanged feed is
+// a bodiless 304 ("not_modified"). A run row is logged for a feed only
+// when it failed or brought something new (every dry run is logged), so
+// checking every minute doesn't flood news_ingestion_runs. Uses the
+// service-role client: server-only.
 
-export type IngestMode = "dry_run" | "draft";
+export type IngestMode = "dry_run" | "draft" | "auto";
+
+// Auto mode: how far back a similar headline (text.ts similarHeadline)
+// keeps a new item a draft.
+const SIMILAR_HEADLINE_DAYS = 7;
+
+// Auto mode: a publisher date this far in the future is suspicious.
+const FUTURE_DATE_TOLERANCE_MS = 60 * 60 * 1000;
 
 type Region = "kenya" | "africa" | "global";
 
@@ -60,6 +77,8 @@ type FeedRow = {
   default_category_id: string;
   relevance_mode: "agri_feed" | "keyword_filter";
   consecutive_failures: number;
+  etag: string | null;
+  last_modified: string | null;
   news_sources: { name: string; video_policy: "none" | "youtube_embed" } | null;
 };
 
@@ -95,16 +114,25 @@ export type FeedDryRunResult = {
   sourceName: string;
   kind: FeedRow["kind"];
   region: Region;
-  status: "completed" | "failed";
+  status: "completed" | "not_modified" | "failed";
   httpStatus: number | null;
   error: string | null;
   counts: FeedCounts;
   candidates: DryRunCandidate[];
   rejected: DryRunRejection[];
   runRowId: string | null;
-  // Draft mode only: what was actually written.
+  // Draft and auto modes: what was actually written. In auto mode each
+  // created draft is either published or held (with the reason).
   drafts: {
-    created: { id: string; slug: string; title: string; kind: "article" | "video"; region: Region }[];
+    created: {
+      id: string;
+      slug: string;
+      title: string;
+      kind: "article" | "video";
+      region: Region;
+      published: boolean;
+      heldReason: string | null;
+    }[];
     failed: { title: string; error: string }[];
   } | null;
 };
@@ -183,7 +211,9 @@ export async function runNewsIngest(
 
   const { data: feedRows, error: feedsError } = await supabase
     .from("news_feeds")
-    .select("id, source_id, kind, feed_url, region, default_category_id, relevance_mode, consecutive_failures, news_sources(name, video_policy)")
+    .select(
+      "id, source_id, kind, feed_url, region, default_category_id, relevance_mode, consecutive_failures, etag, last_modified, news_sources(name, video_policy)",
+    )
     .eq("is_active", true)
     .order("id", { ascending: true });
 
@@ -199,8 +229,24 @@ export async function runNewsIngest(
   const seenRefs = new Set<string>();
   const seenTitles = new Set<string>();
 
+  // Auto mode: headlines of every story imported or written lately (any
+  // status), so the same story under another link stays a draft.
+  let recentTitles: Set<string> | null = null;
+  if (mode === "auto") {
+    const since = new Date(now.getTime() - SIMILAR_HEADLINE_DAYS * 24 * 3600 * 1000).toISOString();
+    const { data: recentRows, error: recentError } = await supabase
+      .from("news_articles")
+      .select("title")
+      .gte("created_at", since)
+      .limit(5000);
+    if (recentError) {
+      throw new Error(`recent_headlines_unavailable: ${recentError.message}`);
+    }
+    recentTitles = new Set((recentRows ?? []).map((row) => titleKey(row.title as string)).filter(Boolean));
+  }
+
   const results = await pool(feeds, FEED_CONCURRENCY, (feed) =>
-    runFeed(supabase, feed, { runId, triggeredBy, mode, now, seenRefs, seenTitles }),
+    runFeed(supabase, feed, { runId, triggeredBy, mode, now, seenRefs, seenTitles, recentTitles }),
   );
 
   return { runId, dryRun: mode === "dry_run", mode, startedAt, completedAt: new Date().toISOString(), feeds: results };
@@ -216,6 +262,7 @@ async function runFeed(
     now: Date;
     seenRefs: Set<string>;
     seenTitles: Set<string>;
+    recentTitles: Set<string> | null;
   },
 ): Promise<FeedDryRunResult> {
   const sourceName = feed.news_sources?.name ?? feed.source_id;
@@ -234,31 +281,28 @@ async function runFeed(
     candidates,
     rejected,
     runRowId: null,
-    drafts: context.mode === "draft" ? { created: [], failed: [] } : null,
+    drafts: context.mode === "dry_run" ? null : { created: [], failed: [] },
   };
 
   const started = new Date();
-  const { data: runRow } = await supabase
-    .from("news_ingestion_runs")
-    .insert({
-      run_id: context.runId,
-      feed_id: feed.id,
-      triggered_by: context.triggeredBy,
-      dry_run: context.mode === "dry_run",
-      status: "running",
-      started_at: started.toISOString(),
-    })
-    .select("id")
-    .single();
-  result.runRowId = (runRow?.id as string | undefined) ?? null;
+  // Validators to store for next time (a 200 with a body only).
+  let validators: { etag: string | null; lastModified: string | null } | null = null;
 
   try {
-    const fetched = await fetchFeed(feed.feed_url);
+    const fetched = await fetchFeed(
+      feed.feed_url,
+      context.mode === "dry_run" ? undefined : { etag: feed.etag, lastModified: feed.last_modified },
+    );
     result.httpStatus = fetched.status;
     if (!fetched.ok) {
       result.error = fetched.error;
       return result;
     }
+    if (fetched.notModified) {
+      result.status = "not_modified";
+      return result;
+    }
+    validators = { etag: fetched.etag, lastModified: fetched.lastModified };
 
     const parsed = parseFeed(fetched.body);
     if (!parsed.ok) {
@@ -423,7 +467,42 @@ async function runFeed(
           counts.duplicate += 1;
           reject(item.title, "already_imported");
         } else {
-          result.drafts.created.push({ id: draftId as string, slug, title: item.title, kind: item.kind, region: item.region });
+          result.drafts.created.push({
+            id: draftId as string,
+            slug,
+            title: item.title,
+            kind: item.kind,
+            region: item.region,
+            published: false,
+            heldReason: context.mode === "auto" ? null : "draft_mode",
+          });
+        }
+      }
+
+      // Auto mode: publish what's clear-cut; everything else stays a draft
+      // with the reason kept in the run log.
+      if (context.mode === "auto" && context.recentTitles) {
+        for (const draft of result.drafts.created) {
+          const item = candidates.find((candidate) => candidate.title === draft.title);
+          if (!item) continue;
+          const key = titleKey(item.title);
+          draft.heldReason =
+            autoPublishBlocker({ title: item.title, body: item.excerpt }, item.kind) ??
+            (new Date(item.publishedAt).getTime() - context.now.getTime() > FUTURE_DATE_TOLERANCE_MS
+              ? "future_publish_date"
+              : null) ??
+            (key && [...context.recentTitles].some((recent) => similarHeadline(key, recent))
+              ? "similar_headline_recently_imported"
+              : null);
+          if (key) context.recentTitles.add(key);
+          if (draft.heldReason) continue;
+
+          const { error: publishError } = await supabase.rpc("auto_publish_news_draft", { p_article_id: draft.id });
+          if (publishError) {
+            draft.heldReason = `publish_check:${publishError.message}`.slice(0, 120);
+          } else {
+            draft.published = true;
+          }
         }
       }
       // From here on, candidates means "drafts actually created".
@@ -439,10 +518,17 @@ async function runFeed(
     result.error = "unexpected_error";
     return result;
   } finally {
-    if (result.runRowId) {
-      await supabase
+    // One row per feed per run -- but only for a dry run, a failure, or a
+    // feed that brought something new.
+    if (context.mode === "dry_run" || result.status === "failed" || counts.new > 0) {
+      const { data: runRow } = await supabase
         .from("news_ingestion_runs")
-        .update({
+        .insert({
+          run_id: context.runId,
+          feed_id: feed.id,
+          triggered_by: context.triggeredBy,
+          dry_run: context.mode === "dry_run",
+          started_at: started.toISOString(),
           status: result.status,
           completed_at: new Date().toISOString(),
           http_status: result.httpStatus,
@@ -464,23 +550,34 @@ async function runFeed(
               video_id: item.video?.id ?? null,
             })),
             rejected,
+            ...(result.drafts
+              ? {
+                  published: result.drafts.created.filter((draft) => draft.published).map((draft) => draft.id),
+                  held: result.drafts.created
+                    .filter((draft) => !draft.published)
+                    .map((draft) => ({ id: draft.id, title: draft.title, reason: draft.heldReason })),
+                }
+              : {}),
           },
         })
-        .eq("id", result.runRowId);
+        .select("id")
+        .single();
+      result.runRowId = (runRow?.id as string | undefined) ?? null;
     }
 
     // Real runs record each feed's fetch state; dry runs never do.
-    if (context.mode === "draft") {
+    if (context.mode !== "dry_run") {
       const finishedAt = new Date().toISOString();
-      const ok = result.status === "completed";
+      const ok = result.status !== "failed";
       await supabase
         .from("news_feeds")
         .update({
           last_fetched_at: finishedAt,
-          last_status: ok ? "ok" : "error",
+          last_status: result.status === "completed" ? "ok" : result.status === "not_modified" ? "not_modified" : "error",
           last_error: ok ? null : (result.error ?? "error").slice(0, 500),
-          last_item_count: counts.seen,
           consecutive_failures: ok ? 0 : (feed.consecutive_failures ?? 0) + 1,
+          ...(result.status === "completed" ? { last_item_count: counts.seen } : {}),
+          ...(validators ? { etag: validators.etag, last_modified: validators.lastModified } : {}),
           ...(ok ? { last_success_at: finishedAt } : {}),
         })
         .eq("id", feed.id);

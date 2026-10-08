@@ -11,15 +11,32 @@ import { FEED_MAX_BYTES, FEED_TIMEOUT_MS, USER_AGENT } from "./config";
 net.setDefaultAutoSelectFamilyAttemptTimeout(2_500);
 
 export type FetchedFeed =
-  | { ok: true; status: number; body: string; finalUrl: string }
+  | {
+      ok: true;
+      notModified: false;
+      status: number;
+      body: string;
+      finalUrl: string;
+      // The validators to send next time (null when the server gave none).
+      etag: string | null;
+      lastModified: string | null;
+    }
+  | { ok: true; notModified: true; status: 304 }
   | { ok: false; status: number | null; error: string };
+
+// The validators from the feed's last good fetch (news_feeds.etag /
+// last_modified). Sending them turns an unchanged feed into a bodiless
+// 304 -- the polite way to check a feed often.
+export type FeedValidators = { etag: string | null; lastModified: string | null };
 
 // Fetches one feed with a hard time limit and a hard size limit: the body
 // is read as a stream and abandoned as soon as it passes FEED_MAX_BYTES,
 // so a huge or endless response can't exhaust memory. Redirects are
 // followed (fetch's own limit applies) but the final URL must still be
-// https. Never throws: every failure comes back as { ok: false }.
-export async function fetchFeed(url: string): Promise<FetchedFeed> {
+// https. With `validators`, an unchanged feed comes back as
+// { notModified: true } and nothing is downloaded. Never throws: every
+// failure comes back as { ok: false }.
+export async function fetchFeed(url: string, validators?: FeedValidators): Promise<FetchedFeed> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FEED_TIMEOUT_MS);
 
@@ -31,8 +48,14 @@ export async function fetchFeed(url: string): Promise<FetchedFeed> {
       headers: {
         "User-Agent": USER_AGENT,
         Accept: "application/rss+xml, application/atom+xml, application/rdf+xml, application/xml;q=0.9, text/xml;q=0.8",
+        ...(validators?.etag ? { "If-None-Match": validators.etag } : {}),
+        ...(validators?.lastModified ? { "If-Modified-Since": validators.lastModified } : {}),
       },
     });
+
+    if (response.status === 304) {
+      return { ok: true, notModified: true, status: 304 };
+    }
 
     if (!response.url.startsWith("https://")) {
       return { ok: false, status: response.status, error: "redirected_to_non_https" };
@@ -71,7 +94,16 @@ export async function fetchFeed(url: string): Promise<FetchedFeed> {
       offset += chunk.byteLength;
     }
 
-    return { ok: true, status: response.status, body: new TextDecoder("utf-8").decode(bytes), finalUrl: response.url };
+    return {
+      ok: true,
+      notModified: false,
+      status: response.status,
+      body: new TextDecoder("utf-8").decode(bytes),
+      finalUrl: response.url,
+      // Kept within news_feeds' column limits; an oversized one is dropped.
+      etag: validator(response.headers.get("etag"), 500),
+      lastModified: validator(response.headers.get("last-modified"), 200),
+    };
   } catch (error) {
     const aborted = error instanceof Error && error.name === "AbortError";
     if (aborted) return { ok: false, status: null, error: "timeout" };
@@ -84,4 +116,9 @@ export async function fetchFeed(url: string): Promise<FetchedFeed> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+function validator(value: string | null, max: number): string | null {
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length <= max ? trimmed : null;
 }

@@ -166,3 +166,43 @@ export function assessRelevance(
       return result(true, null);
   }
 }
+
+// --- automatic publishing -------------------------------------------------------
+
+// Farming stories that still need a person's judgement before they go
+// live: violence and security, courts and protests, live streams (not a
+// story) and paid content. They're imported as drafts as usual; they just
+// never publish themselves.
+const REVIEW_TERMS = [
+  "attack", "attacks", "attacked", "killed", "killing", "violence", "clashes", "bandits", "banditry",
+  "court", "lawsuit", "protest", "protests", "strike",
+  "live stream", "livestream", "live streaming",
+  "sponsored", "advertorial", "partner content",
+] as const;
+const REVIEW_PATTERNS = REVIEW_TERMS.map((term) => ({ term, pattern: termPattern(term) }));
+
+// Whether an imported item is clear-cut enough to go live without an
+// admin. Stricter than assessRelevance (which only decides what becomes a
+// draft): agriculture-only feeds pass almost everything there, which once
+// let a rugby story in. Every reason here keeps the item a DRAFT for
+// review; null means it may be published automatically.
+//   * no exclusion term at all (politics, crime, sport, lifestyle ...)
+//   * no review term (violence, courts, protests, live streams, paid content)
+//   * the HEADLINE names a farming topic (an organisation's name alone,
+//     e.g. "FAO", doesn't count)
+//   * a text story mentions at least 2 farming topics in all
+//   * English or Kiswahili
+export function autoPublishBlocker(
+  { title, body }: { title: string; body: string },
+  kind: "article" | "video",
+): string | null {
+  const text = `${title} ${body}`;
+  const excluded = matches(EXCLUSION_PATTERNS, text);
+  if (excluded.length > 0) return `exclusion_term:${excluded[0]}`;
+  const review = matches(REVIEW_PATTERNS, text);
+  if (review.length > 0) return `needs_review:${review[0]}`;
+  if (matches(TOPIC_PATTERNS, title).length === 0) return "headline_not_about_farming";
+  if (kind === "article" && matches(TOPIC_PATTERNS, text).length < 2) return "too_few_farming_topics";
+  if (!isEnglishOrSwahili(text)) return "language_unclear";
+  return null;
+}
