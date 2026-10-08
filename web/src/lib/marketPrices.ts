@@ -54,7 +54,56 @@ export async function fetchRecentMarketPrices(
     return [];
   }
 
-  const rows = priceRows as PriceRow[];
+  return buildPriceCards(supabase, priceRows as PriceRow[]);
+}
+
+// The latest card for each of the given products, in the order given --
+// for a News market update's linked products (news_article_price_products).
+// Same tables, same RLS (signed-in only) and same card building as
+// fetchRecentMarketPrices; a product with no prices yet simply has no
+// card.
+export async function fetchMarketPricesForProducts(
+  supabase: SupabaseClient,
+  productIds: string[],
+): Promise<MarketPriceCard[]> {
+  if (productIds.length === 0) {
+    return [];
+  }
+
+  const { data: priceRows } = await supabase
+    .from("agricultural_prices")
+    .select("product_id, market_id, source_id, price, price_type, recorded_at")
+    .in("product_id", productIds)
+    .order("recorded_at", { ascending: false })
+    .limit(RECENT_PRICE_ROW_LIMIT);
+
+  if (!priceRows || priceRows.length === 0) {
+    return [];
+  }
+
+  const cards = await buildPriceCards(supabase, priceRows as PriceRow[]);
+  const latestByProduct = new Map<string, MarketPriceCard>();
+  for (const card of cards) {
+    // cards are newest first, so the first one per product is its latest.
+    if (!latestByProduct.has(card.productId)) {
+      latestByProduct.set(card.productId, card);
+    }
+  }
+
+  return productIds.flatMap((id) => {
+    const card = latestByProduct.get(id);
+    return card ? [card] : [];
+  });
+}
+
+// Turns raw agricultural_prices rows into display cards: looks up the
+// products, markets, counties and sources in batched queries, merges each
+// wholesale/retail pair into one card, and sorts newest first. Split out
+// of fetchRecentMarketPrices unchanged so both fetchers share it.
+async function buildPriceCards(
+  supabase: SupabaseClient,
+  rows: PriceRow[],
+): Promise<MarketPriceCard[]> {
   const productIds = Array.from(new Set(rows.map((r) => r.product_id)));
   const marketIds = Array.from(new Set(rows.map((r) => r.market_id)));
   const sourceIds = Array.from(new Set(rows.map((r) => r.source_id)));
