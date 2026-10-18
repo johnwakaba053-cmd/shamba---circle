@@ -170,16 +170,47 @@ export function assessRelevance(
 // --- automatic publishing -------------------------------------------------------
 
 // Farming stories that still need a person's judgement before they go
-// live: violence and security, courts and protests, live streams (not a
-// story) and paid content. They're imported as drafts as usual; they just
-// never publish themselves.
+// live: violence and security, courts and protests, heads of state
+// (politics), live streams (not a story) and paid content. They're
+// imported as drafts as usual; they just never publish themselves.
 const REVIEW_TERMS = [
   "attack", "attacks", "attacked", "killed", "killing", "violence", "clashes", "bandits", "banditry",
   "court", "lawsuit", "protest", "protests", "strike",
+  "president",
   "live stream", "livestream", "live streaming",
   "sponsored", "advertorial", "partner content",
 ] as const;
 const REVIEW_PATTERNS = REVIEW_TERMS.map((term) => ({ term, pattern: termPattern(term) }));
+
+// Events and webinars: a headline naming one is usually an announcement
+// or a recording, often of something already over -- an admin decides.
+const EVENT_TERMS = [
+  "webinar", "webinars", "exhibition", "expo", "forum", "summit", "conference", "symposium",
+  "workshop", "pavilion",
+] as const;
+const EVENT_PATTERNS = EVENT_TERMS.map((term) => ({ term, pattern: termPattern(term) }));
+
+// Farming topics that, alone in a headline, usually mean a humanitarian
+// or policy story rather than a farming one. They still make an item
+// relevant (assessRelevance); they just don't make it auto-publishable.
+const HUMANITARIAN_TERMS: ReadonlySet<string> = new Set([
+  "hunger", "malnutrition", "food security", "food system", "food systems", "chakula",
+]);
+
+// Too broad to show a video's description says anything about it: a
+// channel's boilerplate ("agricultural and agribusiness content") names
+// only these.
+const GENERIC_TOPIC_TERMS: ReadonlySet<string> = new Set([
+  "agriculture", "agricultural", "agribusiness", "farm", "farms", "farmer", "farmers", "farming",
+  "crop", "crops", "kilimo", "mkulima", "wakulima", "shamba",
+]);
+
+// A video's description with links and hashtags removed names at least
+// one specific farming topic.
+function hasSubstantiveDescription(body: string): boolean {
+  const description = body.replace(/\S*(?:https?:\/\/|www\.)\S*/gi, " ").replace(/#\S+/g, " ");
+  return matches(TOPIC_PATTERNS, description).some((term) => !GENERIC_TOPIC_TERMS.has(term));
+}
 
 // Whether an imported item is clear-cut enough to go live without an
 // admin. Stricter than assessRelevance (which only decides what becomes a
@@ -187,10 +218,14 @@ const REVIEW_PATTERNS = REVIEW_TERMS.map((term) => ({ term, pattern: termPattern
 // let a rugby story in. Every reason here keeps the item a DRAFT for
 // review; null means it may be published automatically.
 //   * no exclusion term at all (politics, crime, sport, lifestyle ...)
-//   * no review term (violence, courts, protests, live streams, paid content)
+//   * no review term (violence, courts, protests, heads of state, live
+//     streams, paid content)
+//   * the HEADLINE names no event or webinar
 //   * the HEADLINE names a farming topic (an organisation's name alone,
-//     e.g. "FAO", doesn't count)
-//   * a text story mentions at least 2 farming topics in all
+//     e.g. "FAO", doesn't count, and neither do hunger / food security
+//     terms alone)
+//   * a text story mentions at least 2 farming topics in all; a video's
+//     description names a specific one
 //   * English or Kiswahili
 export function autoPublishBlocker(
   { title, body }: { title: string; body: string },
@@ -201,8 +236,13 @@ export function autoPublishBlocker(
   if (excluded.length > 0) return `exclusion_term:${excluded[0]}`;
   const review = matches(REVIEW_PATTERNS, text);
   if (review.length > 0) return `needs_review:${review[0]}`;
-  if (matches(TOPIC_PATTERNS, title).length === 0) return "headline_not_about_farming";
+  const event = matches(EVENT_PATTERNS, title);
+  if (event.length > 0) return `event_or_webinar:${event[0]}`;
+  if (matches(TOPIC_PATTERNS, title).filter((term) => !HUMANITARIAN_TERMS.has(term)).length === 0) {
+    return "headline_not_about_farming";
+  }
   if (kind === "article" && matches(TOPIC_PATTERNS, text).length < 2) return "too_few_farming_topics";
+  if (kind === "video" && !hasSubstantiveDescription(body)) return "video_description_not_substantive";
   if (!isEnglishOrSwahili(text)) return "language_unclear";
   return null;
 }
