@@ -1,0 +1,70 @@
+[
+  {
+    "file": "shamba-space-indigenous-chicken-guide/cover-1280.webp",
+    "bytes": 99088,
+    "pixels": "1280x720",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "4c8a660f141736d50a604ff4d0b88fdd5f960b63",
+    "source": "1-indigenous-chicken.jpg",
+    "crop_box": [
+      0,
+      110,
+      1824,
+      1136
+    ],
+    "source_icc": "sRGB (dropped)"
+  },
+  {
+    "file": "shamba-space-indigenous-chicken-guide/cover-640.webp",
+    "bytes": 37790,
+    "pixels": "640x360",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "747f24d3288ac0664404895c22d1762bfc721728",
+    "source": "1-indigenous-chicken.jpg",
+    "crop_box": [
+      0,
+      110,
+      1824,
+      1136
+    ],
+    "source_icc": "sRGB (dropped)"
+  },
+  {
+    "file": "shamba-space-rabbits-guide/cover-1280.webp",
+    "bytes": 86334,
+    "pixels": "1280x720",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "d4d5da7cf8fd7e06330877de6321453890734744",
+    "source": "2-rabbits.jpg",
+    "crop_box": [
+      0,
+      104,
+      5008,
+      2921
+    ],
+    "source_icc": "sRGB IEC61966-2.1 (dropped)"
+  },
+  {
+    "file": "shamba-space-rabbits-guide/cover-640.webp",
+    "bytes": 29042,
+    "pixels": "640x360",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "875602f933693157edeb1a88e9c2934a26f69ace",
+    "source": "2-rabbits.jpg",
+    "crop_box": [
+      0,
+      104,
+      5008,
+      2921
+    ],
+    "source_icc": "sRGB IEC61966-2.1 (dropped)"
+  }
+]

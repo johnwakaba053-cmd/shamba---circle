@@ -123,14 +123,12 @@ export type NewsCardData = {
 
 export const NEWS_PAGE_SIZE = 12;
 
-// How many stories each section of the /news front page shows (N5).
+// How many stories each part of the /news page shows: Featured leads the
+// Latest feed on the front page; Trending and Videos are the sidebar.
 export const NEWS_SECTION_LIMITS = {
   trending: 5,
   featured: 3,
-  watch: 6,
-  photoStories: 4,
-  markets: 3,
-  farmTech: 4,
+  videos: 3,
 } as const;
 
 // Trending (decided, interim "option C"): the newest live stories from
@@ -138,9 +136,6 @@ export const NEWS_SECTION_LIMITS = {
 // NEWS_TRENDING_MIN stories qualify.
 export const NEWS_TRENDING_WINDOW_HOURS = 72;
 export const NEWS_TRENDING_MIN = 3;
-
-// The topics the "Farm Tech & AI" section collects.
-export const NEWS_FARM_TECH_CATEGORIES = ["farm-tech", "ai-innovation"] as const;
 
 // /news?format=&region=&category=&page= -- same "build the next href from the
 // current one" shape as buildEducationHref. A field explicitly set to
@@ -194,15 +189,6 @@ export function parseNewsPage(value: unknown): number {
   return page >= 1 && page <= NEWS_MAX_PAGE ? page : 1;
 }
 
-// Covers live in the public 'news-media' bucket (N1), so this is a plain
-// public URL -- stable for link previews, nothing to sign. N1's check
-// constraint already limits the path to '<uuid>/<file>'.
-export function newsCoverUrl(path: string | null): string | null {
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/+$/, "");
-  if (!path || !base) return null;
-  return `${base}/storage/v1/object/public/news-media/${path.split("/").map(encodeURIComponent).join("/")}`;
-}
-
 // Only ever rendered as an <a href> after this check: https only.
 export function safeExternalUrl(value: string | null): string | null {
   if (!value) return null;
@@ -225,6 +211,23 @@ export function formatNewsDate(iso: string): string {
     month: "short",
     year: "numeric",
   });
+}
+
+// "Just now", "2 hours ago", "3 days ago"; a week or older is the date.
+export function formatNewsAgo(iso: string, now: Date = new Date()): string {
+  const minutes = Math.floor((now.getTime() - new Date(iso).getTime()) / 60_000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days} ${days === 1 ? "day" : "days"} ago`;
+  return formatNewsDate(iso);
+}
+
+// Who the story is from: a blog's byline, else the source's name.
+export function newsCredit(article: { byline: string | null; news_sources: { name: string } | null }): string | null {
+  return article.byline ? `By ${article.byline}` : (article.news_sources?.name ?? null);
 }
 
 export function formatNewsToday(now: Date = new Date()): string {

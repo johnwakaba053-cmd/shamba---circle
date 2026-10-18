@@ -13,7 +13,12 @@ export type NotificationType =
   | "mention"
   | "marketplace"
   | "education"
-  | "private_message";
+  | "private_message"
+  | "expert_application_changes_requested"
+  | "expert_application_approved"
+  | "expert_application_rejected"
+  | "expert_suspended"
+  | "expert_reinstated";
 
 export type NotificationEntityType =
   | "alert"
@@ -22,7 +27,8 @@ export type NotificationEntityType =
   | "post_comment"
   | "listing"
   | "education_resource"
-  | "conversation";
+  | "conversation"
+  | "expert_application";
 
 export type NotificationRow = {
   id: string;
@@ -126,8 +132,16 @@ export async function attachNotificationReelIds(
 // notification with no href still renders (see NotificationCard), it
 // just isn't a link.
 export function getNotificationHref(
-  notification: Pick<NotificationRow, "entity_type" | "entity_id"> & { reelId?: string | null },
+  notification: Pick<NotificationRow, "type" | "entity_type" | "entity_id"> & { reelId?: string | null },
 ): string | null {
+  // Expert suspension/reinstatement notifications point at the expert's
+  // own profile (entity_type "profile"), but the place that explains the
+  // status is the expert's application page -- routed by type, before
+  // the entity switch below.
+  if (notification.type === "expert_suspended" || notification.type === "expert_reinstated") {
+    return "/experts/apply";
+  }
+
   switch (notification.entity_type) {
     case "post":
     case "post_comment":
@@ -147,6 +161,10 @@ export function getNotificationHref(
       // access itself on every load (via get_my_conversations()) --
       // this link is never the security boundary, just a destination.
       return notification.entity_id ? `/messages/${notification.entity_id}` : null;
+    case "expert_application":
+      // Only the applicant's latest application is ever shown, and
+      // /experts/apply loads it (and its status) itself.
+      return "/experts/apply";
     default:
       return null;
   }

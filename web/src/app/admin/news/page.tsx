@@ -10,6 +10,7 @@ import {
   type NewsRegion,
 } from "@/lib/news";
 import { formatSourceTime } from "@/lib/newsAdmin";
+import { signNewsMediaPaths } from "@/lib/newsMedia";
 import { requireAdmin } from "@/lib/staff";
 import { isYouTubeVideoId } from "@/lib/youtube";
 import { NewsCoverImage } from "@/app/news/NewsCoverImage";
@@ -85,6 +86,12 @@ export default async function NewsDraftReview({
   ]);
 
   const drafts = (data ?? []) as unknown as DraftRow[];
+  // Covers are in the private news-media bucket (the admin's own storage
+  // policy covers drafts): one signing request for the whole list.
+  const coverUrls = await signNewsMediaPaths(
+    supabase,
+    drafts.map((draft) => draft.cover_image_path),
+  );
   const categories = categoryRows ?? [];
   const counts = new Map<string, number>();
   for (const row of countRows ?? []) {
@@ -241,8 +248,8 @@ export default async function NewsDraftReview({
                     <div className="min-w-0">
                       {draft.format === "video" && videoId ? (
                         <YouTubeFacade videoId={videoId} title={draft.title} durationLabel={null} />
-                      ) : draft.cover_image_path ? (
-                        <NewsCoverImage path={draft.cover_image_path} alt={draft.cover_image_alt} />
+                      ) : draft.cover_image_path && coverUrls.has(draft.cover_image_path) ? (
+                        <NewsCoverImage src={coverUrls.get(draft.cover_image_path)} alt={draft.cover_image_alt} />
                       ) : (
                         <p className="flex items-start gap-2 rounded-shamba border border-dashed border-shamba-line p-3 text-xs leading-5 text-shamba-ink-soft">
                           <ImageOff className="mt-0.5 size-4 shrink-0" aria-hidden="true" />

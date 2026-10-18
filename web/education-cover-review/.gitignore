@@ -1,0 +1,5 @@
+# Unprocessed Wikimedia originals: full size, with the photographers'
+# embedded metadata (one carries GPS). Kept local for review only.
+originals/*.jpg
+originals/*.jpeg
+originals/*.png

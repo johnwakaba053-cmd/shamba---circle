@@ -11,6 +11,7 @@ import {
   isResourceType,
   buildEducationHref,
 } from "@/lib/education";
+import { fetchEducationCovers } from "@/lib/educationMedia";
 import { ResourceCard, type EducationResourceCardData } from "./ResourceCard";
 
 type EducationCategory = {
@@ -124,6 +125,17 @@ export default async function Education({
   }
 
   const { data: resources, error: resourcesError } = await resourcesQuery;
+
+  // Licensed cover photos for the listed articles/documents (videos keep
+  // their YouTube still). Empty -- and every card unchanged -- when no
+  // guide has a cover.
+  const covers = await fetchEducationCovers(
+    supabase,
+    ((resources ?? []) as { id: string; resource_type: string }[])
+      .filter((resource) => resource.resource_type !== "video")
+      .map((resource) => resource.id),
+    "card",
+  );
 
   const hasError = Boolean(categoriesError || resourcesError || topicsError);
   const activeCategoryName = (categories as EducationCategory[] | null)?.find(
@@ -438,6 +450,7 @@ export default async function Education({
                 key={resource.id}
                 resource={resource}
                 topic={resource.topic_id ? topicsById.get(resource.topic_id) : undefined}
+                cover={covers.get(resource.id)}
               />
             ))}
           </div>

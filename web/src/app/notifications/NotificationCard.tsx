@@ -3,13 +3,17 @@
 import Link from "next/link";
 import {
   AtSign,
+  BadgeCheck,
   Bell,
   BookOpen,
   Check,
+  FilePen,
   Heart,
   MessageCircle,
+  ShieldAlert,
   Store,
   UserPlus,
+  XCircle,
 } from "lucide-react";
 import {
   getNotificationHref,
@@ -31,6 +35,10 @@ import {
 // "Messages" nav link, MessageActionButton) -- the same glyph already
 // doing double duty for post_comment here is an accepted, pre-existing
 // overlap, not something this change introduces or resolves.
+// Expert notifications reuse the icons the /experts/apply status view
+// already shows for the same states (BadgeCheck approved, XCircle not
+// approved); FilePen for "changes requested" and ShieldAlert for a
+// suspension are the new choices.
 const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   alert: Bell,
   new_follower: UserPlus,
@@ -40,6 +48,11 @@ const TYPE_ICON: Record<NotificationType, typeof Bell> = {
   marketplace: Store,
   education: BookOpen,
   private_message: MessageCircle,
+  expert_application_changes_requested: FilePen,
+  expert_application_approved: BadgeCheck,
+  expert_application_rejected: XCircle,
+  expert_suspended: ShieldAlert,
+  expert_reinstated: BadgeCheck,
 };
 
 const TYPE_LABELS: Record<NotificationType, string> = {
@@ -51,6 +64,11 @@ const TYPE_LABELS: Record<NotificationType, string> = {
   marketplace: "Marketplace",
   education: "Education",
   private_message: "Message",
+  expert_application_changes_requested: "Expert application",
+  expert_application_approved: "Verified Expert",
+  expert_application_rejected: "Expert application",
+  expert_suspended: "Verified Expert",
+  expert_reinstated: "Verified Expert",
 };
 
 function formatNotificationTime(iso: string): string {

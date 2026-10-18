@@ -1,16 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import {
   NEWS_CARD_COLUMNS,
-  NEWS_FARM_TECH_CATEGORIES,
   NEWS_PAGE_SIZE,
   NEWS_SECTION_LIMITS,
   NEWS_TRENDING_MIN,
   NEWS_TRENDING_WINDOW_HOURS,
-  newsCoverUrl,
   type NewsCardData,
   type NewsFormat,
   type NewsRegion,
 } from "@/lib/news";
+import { signNewsMediaPaths } from "@/lib/newsMedia";
 import { isYouTubeVideoId } from "@/lib/youtube";
 
 type ServerClient = Awaited<ReturnType<typeof createClient>>;
@@ -30,9 +29,12 @@ export function liveNewsArticles(supabase: ServerClient, nowIso: string) {
 
 // === card media ==============================================================
 
-// What a card needs from news_media (N4): a video story's YouTube ID and
-// duration, a photo story's first photos and photo count.
+// What a card needs for its picture: the cover's signed URL (the bucket
+// is private, see lib/newsMedia.ts), and from news_media (N4) a video
+// story's YouTube ID and duration, a photo story's first photos and
+// photo count.
 export type NewsCardMedia = {
+  coverUrl: string | null;
   videoId: string | null;
   durationSeconds: number | null;
   photos: { url: string; alt: string }[];
@@ -50,8 +52,9 @@ type MediaRow = {
 
 const CARD_PHOTOS = 3;
 
-// One query for every card on the page (not one per card). news_media's
-// RLS returns media only for articles the reader can see.
+// One media query and one signing request for every card on the page
+// (not one per card). news_media's RLS returns media only for articles
+// the reader can see, and Storage signs only files the reader may read.
 export async function fetchCardMedia(
   supabase: ServerClient,
   articles: NewsCardData[],
@@ -60,142 +63,58 @@ export async function fetchCardMedia(
   const ids = articles
     .filter((article) => article.format === "video" || article.format === "photo_story")
     .map((article) => article.id);
-  if (ids.length === 0) return result;
 
-  const { data } = await supabase
-    .from("news_media")
-    .select("article_id, kind, storage_path, embed_id, alt, duration_seconds")
-    .in("article_id", ids)
-    .order("sort_order", { ascending: true })
-    .order("created_at", { ascending: true });
+  const { data } =
+    ids.length > 0
+      ? await supabase
+          .from("news_media")
+          .select("article_id, kind, storage_path, embed_id, alt, duration_seconds")
+          .in("article_id", ids)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: true })
+      : { data: [] };
+  const rows = (data ?? []) as MediaRow[];
 
-  for (const row of (data ?? []) as MediaRow[]) {
-    const media = result.get(row.article_id) ?? { videoId: null, durationSeconds: null, photos: [], photoCount: 0 };
+  const urls = await signNewsMediaPaths(supabase, [
+    ...articles.map((article) => article.cover_image_path),
+    ...rows.map((row) => row.storage_path),
+  ]);
+  const entry = (articleId: string) => {
+    const media = result.get(articleId) ?? {
+      coverUrl: null,
+      videoId: null,
+      durationSeconds: null,
+      photos: [],
+      photoCount: 0,
+    };
+    result.set(articleId, media);
+    return media;
+  };
+
+  for (const article of articles) {
+    const coverUrl = article.cover_image_path ? urls.get(article.cover_image_path) : undefined;
+    if (coverUrl) entry(article.id).coverUrl = coverUrl;
+  }
+
+  for (const row of rows) {
+    const media = entry(row.article_id);
 
     if (row.kind === "video_embed" && !media.videoId && isYouTubeVideoId(row.embed_id)) {
       media.videoId = row.embed_id;
       media.durationSeconds = row.duration_seconds;
     } else if (row.kind === "image") {
       media.photoCount += 1;
-      const url = newsCoverUrl(row.storage_path);
+      const url = row.storage_path ? urls.get(row.storage_path) : undefined;
       if (url && media.photos.length < CARD_PHOTOS) {
         media.photos.push({ url, alt: row.alt ?? "" });
       }
     }
-
-    result.set(row.article_id, media);
   }
 
   return result;
 }
 
-// === front page ==============================================================
-
-export type NewsHome = {
-  trending: NewsCardData[];
-  featured: NewsCardData[];
-  watch: NewsCardData[];
-  photoStories: NewsCardData[];
-  markets: NewsCardData[];
-  farmTech: NewsCardData[];
-  latest: NewsCardData[];
-  hasOlder: boolean;
-  media: Map<string, NewsCardMedia>;
-  error: boolean;
-};
-
-// Extra rows fetched per section, so leaving out stories already shown
-// higher up the page doesn't leave a section short.
-const HEADROOM = 8;
-
-// Every section is queried in parallel, then each story is kept only in
-// the first section that claims it, in this order: Featured (the
-// editor's choice always wins), Trending, Watch, Photo Stories,
-// Markets & Prices, Farm Tech & AI, Latest. Display order on the page is
-// Trending first; see page.tsx.
-export async function fetchNewsHome(supabase: ServerClient, now: Date): Promise<NewsHome> {
-  const nowIso = now.toISOString();
-  const trendingSince = new Date(now.getTime() - NEWS_TRENDING_WINDOW_HOURS * 3600 * 1000).toISOString();
-  const live = () => liveNewsArticles(supabase, nowIso);
-  const newest = { ascending: false } as const;
-
-  const results = await Promise.all([
-    live()
-      .eq("is_featured", true)
-      .order("featured_rank", { ascending: true, nullsFirst: false })
-      .order("published_at", newest)
-      .limit(NEWS_SECTION_LIMITS.featured),
-    live()
-      .eq("is_featured", false)
-      .gte("published_at", trendingSince)
-      .order("published_at", newest)
-      .order("id", { ascending: true })
-      .limit(NEWS_SECTION_LIMITS.trending + HEADROOM),
-    live().eq("format", "video").order("published_at", newest).limit(NEWS_SECTION_LIMITS.watch + HEADROOM),
-    live()
-      .eq("format", "photo_story")
-      .order("published_at", newest)
-      .limit(NEWS_SECTION_LIMITS.photoStories + HEADROOM),
-    live()
-      .eq("category_id", "markets-prices")
-      .order("published_at", newest)
-      .limit(NEWS_SECTION_LIMITS.markets + HEADROOM),
-    live()
-      .in("category_id", [...NEWS_FARM_TECH_CATEGORIES])
-      .order("published_at", newest)
-      .limit(NEWS_SECTION_LIMITS.farmTech + HEADROOM),
-    // Latest, page 1, plus one row to tell whether an older page exists.
-    live().order("published_at", newest).order("id", { ascending: true }).range(0, NEWS_PAGE_SIZE),
-  ]);
-
-  const error = results.some((result) => Boolean(result.error));
-  const [featuredRows, trendingRows, watchRows, photoRows, marketRows, techRows, latestRows] = results.map(
-    (result) => (result.data ?? []) as unknown as NewsCardData[],
-  );
-
-  const shown = new Set<string>();
-  const take = (rows: NewsCardData[], limit: number) => {
-    const picked: NewsCardData[] = [];
-    for (const row of rows) {
-      if (picked.length >= limit) break;
-      if (shown.has(row.id)) continue;
-      shown.add(row.id);
-      picked.push(row);
-    }
-    return picked;
-  };
-
-  const featured = take(featuredRows, NEWS_SECTION_LIMITS.featured);
-  let trending = take(trendingRows, NEWS_SECTION_LIMITS.trending);
-  if (trending.length < NEWS_TRENDING_MIN) {
-    // Too few to be worth a section: hand them back to the sections below.
-    trending.forEach((article) => shown.delete(article.id));
-    trending = [];
-  }
-  const watch = take(watchRows, NEWS_SECTION_LIMITS.watch);
-  const photoStories = take(photoRows, NEWS_SECTION_LIMITS.photoStories);
-  const markets = take(marketRows, NEWS_SECTION_LIMITS.markets);
-  const farmTech = take(techRows, NEWS_SECTION_LIMITS.farmTech);
-
-  // Latest counts every story for paging (so page 2 starts at story 13
-  // whatever page 1 left out), but page 1 doesn't repeat stories above.
-  const hasOlder = latestRows.length > NEWS_PAGE_SIZE;
-  const latest = latestRows.slice(0, NEWS_PAGE_SIZE).filter((article) => !shown.has(article.id));
-
-  const media = await fetchCardMedia(supabase, [
-    ...trending,
-    ...featured,
-    ...watch,
-    ...photoStories,
-    ...markets,
-    ...farmTech,
-    ...latest,
-  ]);
-
-  return { trending, featured, watch, photoStories, markets, farmTech, latest, hasOlder, media, error };
-}
-
-// === filtered list ===========================================================
+// === the /news page ==========================================================
 
 export type NewsListFilters = {
   format?: NewsFormat;
@@ -204,22 +123,78 @@ export type NewsListFilters = {
   page: number;
 };
 
-// A filtered view, or page 2+ of everything: one list, newest first.
-export async function fetchNewsList(supabase: ServerClient, now: Date, filters: NewsListFilters) {
-  let query = liveNewsArticles(supabase, now.toISOString());
-  if (filters.format) query = query.eq("format", filters.format);
-  if (filters.region) query = query.eq("region", filters.region);
-  if (filters.category) query = query.eq("category_id", filters.category);
+export type NewsFront = {
+  // The main feed: on the front page, Featured first, then the newest
+  // stories; otherwise one filtered, newest-first page.
+  feed: NewsCardData[];
+  hasOlder: boolean;
+  // The sidebar.
+  trending: NewsCardData[];
+  videos: NewsCardData[];
+  media: Map<string, NewsCardMedia>;
+  error: boolean;
+};
 
+// Everything /news shows, queried in parallel. The sidebar (Trending,
+// Videos) is the same on every view and may repeat a story from the feed,
+// like a newspaper's "most read" column. Only the feed pages.
+export async function fetchNewsFront(
+  supabase: ServerClient,
+  now: Date,
+  filters: NewsListFilters & { frontPage: boolean },
+): Promise<NewsFront> {
+  const nowIso = now.toISOString();
+  const trendingSince = new Date(now.getTime() - NEWS_TRENDING_WINDOW_HOURS * 3600 * 1000).toISOString();
+  const live = () => liveNewsArticles(supabase, nowIso);
+  const newest = { ascending: false } as const;
+
+  // One page of the feed (plus one row to tell whether an older page
+  // exists). Page numbers count every story, so page 2 starts at story 13
+  // whatever Featured moved to the top of page 1.
+  let feedQuery = live();
+  if (filters.format) feedQuery = feedQuery.eq("format", filters.format);
+  if (filters.region) feedQuery = feedQuery.eq("region", filters.region);
+  if (filters.category) feedQuery = feedQuery.eq("category_id", filters.category);
   const from = (filters.page - 1) * NEWS_PAGE_SIZE;
-  const { data, error } = await query
-    .order("published_at", { ascending: false })
-    .order("id", { ascending: true })
-    .range(from, from + NEWS_PAGE_SIZE);
 
-  const rows = (data ?? []) as unknown as NewsCardData[];
-  const articles = rows.slice(0, NEWS_PAGE_SIZE);
-  const media = await fetchCardMedia(supabase, articles);
+  const results = await Promise.all([
+    feedQuery
+      .order("published_at", newest)
+      .order("id", { ascending: true })
+      .range(from, from + NEWS_PAGE_SIZE),
+    filters.frontPage
+      ? live()
+          .eq("is_featured", true)
+          .order("featured_rank", { ascending: true, nullsFirst: false })
+          .order("published_at", newest)
+          .limit(NEWS_SECTION_LIMITS.featured)
+      : Promise.resolve({ data: [], error: null }),
+    live()
+      .eq("is_featured", false)
+      .gte("published_at", trendingSince)
+      .order("published_at", newest)
+      .order("id", { ascending: true })
+      .limit(NEWS_SECTION_LIMITS.trending),
+    live().eq("format", "video").order("published_at", newest).limit(NEWS_SECTION_LIMITS.videos),
+  ]);
 
-  return { articles, hasOlder: rows.length > NEWS_PAGE_SIZE, media, error: Boolean(error) };
+  const error = results.some((result) => Boolean(result.error));
+  const [feedRows, featuredRows, trendingRows, videos] = results.map(
+    (result) => (result.data ?? []) as unknown as NewsCardData[],
+  );
+
+  const hasOlder = feedRows.length > NEWS_PAGE_SIZE;
+  const featuredIds = new Set(featuredRows.map((article) => article.id));
+  const feed = [
+    ...featuredRows,
+    ...feedRows.slice(0, NEWS_PAGE_SIZE).filter((article) => !featuredIds.has(article.id)),
+  ];
+  // Too few to be worth a list: no Trending at all.
+  const trending = trendingRows.length >= NEWS_TRENDING_MIN ? trendingRows : [];
+
+  const unique = new Map<string, NewsCardData>();
+  for (const article of [...feed, ...trending, ...videos]) unique.set(article.id, article);
+  const media = await fetchCardMedia(supabase, [...unique.values()]);
+
+  return { feed, hasOlder, trending, videos, media, error };
 }

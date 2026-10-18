@@ -1,10 +1,10 @@
 import { headers } from "next/headers";
 import { configuredSiteOrigin } from "@/lib/reelUrl";
 
-// Shared by the /news pages' generateMetadata. News is public, so --
-// unlike Reels -- link previews (WhatsApp, Facebook, X) show the real
-// story: they're fetched signed-out, and RLS gives a signed-out request
-// exactly the published articles.
+// Shared by the /news pages' generateMetadata. Agriculture Today is for
+// signed-in members, so a signed-out request (including a link-preview
+// fetch) gets only the generic Agriculture Today title -- see the
+// article page's generateMetadata.
 
 export const NEWS_SITE_NAME = "Shamba Space";
 

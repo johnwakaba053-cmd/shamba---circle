@@ -1,5 +1,5 @@
 import { Images, Play } from "lucide-react";
-import { newsCoverUrl, type NewsCardData } from "@/lib/news";
+import type { NewsCardData } from "@/lib/news";
 import { formatVideoDuration, getYouTubeThumbnailUrl } from "@/lib/youtube";
 import type { NewsCardMedia } from "./newsData";
 
@@ -10,29 +10,37 @@ import type { NewsCardMedia } from "./newsData";
 //   photo_story  the cover, else the first photo -- with a photo count
 //   otherwise    the cover, if there is one
 // Nothing at all when there's no picture: the card reads well without.
-// Always 16:9, so cards never jump while images load. Plain <img> like
-// every other Storage image in the app; decorative here (the card title
-// says what the story is), so alt is empty.
+// Full-width 16:9 unless `className` sets another size, so cards never jump
+// while images load. size="small" (a sidebar thumbnail) keeps a smaller
+// play mark and leaves out the length and photo count. `children` are
+// extra overlays, e.g. the feed's region tag. Plain <img> like every
+// other Storage image in the app; decorative here (the card title says
+// what the story is), so alt is empty.
 export function NewsCardThumbnail({
   article,
   media,
   priority = false,
+  className = "aspect-video w-full",
+  size = "default",
+  children,
 }: {
   article: NewsCardData;
   media: NewsCardMedia | undefined;
   priority?: boolean;
+  className?: string;
+  size?: "default" | "small";
+  children?: React.ReactNode;
 }) {
-  const cover = newsCoverUrl(article.cover_image_path);
   const videoId = article.format === "video" ? (media?.videoId ?? null) : null;
-  const firstPhoto = article.format === "photo_story" ? media?.photos[0]?.url : undefined;
-  const src = cover ?? (videoId ? getYouTubeThumbnailUrl(videoId) : firstPhoto) ?? null;
+  const src = newsCardImageSrc(article, media);
   if (!src) return null;
 
-  const duration = videoId ? formatVideoDuration(media?.durationSeconds) : null;
-  const photoCount = article.format === "photo_story" ? (media?.photoCount ?? 0) : 0;
+  const small = size === "small";
+  const duration = videoId && !small ? formatVideoDuration(media?.durationSeconds) : null;
+  const photoCount = article.format === "photo_story" && !small ? (media?.photoCount ?? 0) : 0;
 
   return (
-    <div className="relative aspect-video w-full overflow-hidden rounded-shamba bg-shamba-bg">
+    <div className={`relative overflow-hidden rounded-shamba bg-shamba-bg ${className}`}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
@@ -45,8 +53,10 @@ export function NewsCardThumbnail({
 
       {article.format === "video" && videoId && (
         <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-black/55">
-            <Play className="size-6 fill-shamba-card text-shamba-card" />
+          <span
+            className={`flex items-center justify-center rounded-full bg-black/55 ${small ? "size-7" : "size-12"}`}
+          >
+            <Play className={`fill-shamba-card text-shamba-card ${small ? "size-3.5" : "size-6"}`} />
           </span>
         </span>
       )}
@@ -64,6 +74,17 @@ export function NewsCardThumbnail({
           {photoCount} {photoCount === 1 ? "photo" : "photos"}
         </span>
       )}
+
+      {children}
     </div>
   );
+}
+
+// The card picture's URL, or null when the story has none (so a caller
+// can show something else in its place).
+export function newsCardImageSrc(article: NewsCardData, media: NewsCardMedia | undefined): string | null {
+  const cover = media?.coverUrl ?? null;
+  const videoId = article.format === "video" ? (media?.videoId ?? null) : null;
+  const firstPhoto = article.format === "photo_story" ? media?.photos[0]?.url : undefined;
+  return cover ?? (videoId ? getYouTubeThumbnailUrl(videoId) : firstPhoto) ?? null;
 }

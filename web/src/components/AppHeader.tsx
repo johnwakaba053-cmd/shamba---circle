@@ -5,8 +5,10 @@ import {
   ClipboardList,
   CloudSun,
   MessageCircle,
+  Newspaper,
   Sprout,
   Store,
+  Tractor,
   TrendingUp,
   UserRound,
   Users,
@@ -24,11 +26,13 @@ import { SignOutButton } from "./SignOutButton";
 // Layout: every destination is a labelled item (icon AND word, never an
 // icon alone). Top row: brand, then the farmer's own things --
 // Notifications (with its unread count) always, plus Profile and Sign
-// out from sm up. Second row: the places to go, in the landing page's
-// pillar order (Communities, Farming Reels, Weather, Marketplace) then
-// Messages and the rest. On phones that row scrolls sideways instead of
-// wrapping (a fade on the right edge shows there's more), and Profile /
-// Sign out sit at its end since the top row has no room for them.
+// out from sm up. Second row: the places to go -- My Farm (the
+// farmer's own dashboard) first, then Agriculture Today (/news), then
+// the landing page's pillar order (Communities, Farming Reels,
+// Weather, Marketplace), then Messages and the rest. On
+// phones that row scrolls sideways instead of wrapping (a fade on the
+// right edge shows there's more), and Profile / Sign out sit at its end
+// since the top row has no room for them.
 //
 // Gutters: px-6 / sm:px-10 matches the <main> of the pages below it, so
 // the Sprout mark, the first tab's label and page content share one left
@@ -62,6 +66,16 @@ export function AppHeader() {
           aria-label="Main"
           className="flex items-center overflow-x-auto whitespace-nowrap scroll-pl-4 scroll-pr-10 pl-4 pr-10 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:-mx-2 sm:flex-wrap sm:overflow-visible sm:px-0"
         >
+          <NavLink href="/my-farm">
+            <Tractor className="size-4" aria-hidden="true" />
+            My Farm
+          </NavLink>
+
+          <NavLink href="/news">
+            <Newspaper className="size-4" aria-hidden="true" />
+            Agriculture Today
+          </NavLink>
+
           <NavLink href="/communities">
             <Users className="size-4" aria-hidden="true" />
             Communities

@@ -11,6 +11,9 @@ import {
   type ResourceType,
   type ResourceOrigin,
 } from "@/lib/education";
+import type { EducationCover } from "@/lib/educationMedia";
+import { CoverCredit } from "./CoverCredit";
+import { HideOnErrorImage } from "./HideOnErrorImage";
 
 // The single card used for every education_resources row, in both the
 // Learning Library grid and the Watch & Learn section -- one component so
@@ -42,9 +45,13 @@ export type EducationResourceCardTopic = {
 export function ResourceCard({
   resource,
   topic,
+  cover,
 }: {
   resource: EducationResourceCardData;
   topic: EducationResourceCardTopic | undefined;
+  // An article/document's licensed cover photo (lib/educationMedia.ts),
+  // when it has one. Videos keep their YouTube still and ignore it.
+  cover?: EducationCover;
 }) {
   const Icon =
     EDUCATION_CATEGORY_ICON[resource.category_id] ?? EDUCATION_CATEGORY_FALLBACK_ICON;
@@ -107,6 +114,22 @@ export function ResourceCard({
               {duration}
             </span>
           )}
+        </div>
+      )}
+
+      {/* Additive like the video thumbnail: a card without a cover
+          renders exactly as before. Decorative (alt="") here, since the
+          title right below says what the guide is; the alt text is used
+          on the guide page. The credit goes wherever the photo goes, and
+          both disappear together if the file fails to load. */}
+      {!isVideo && cover && (
+        <div data-cover className="flex flex-col gap-1">
+          <div className="relative aspect-video w-full overflow-hidden rounded-shamba bg-shamba-bg">
+            <HideOnErrorImage src={cover.src} alt="" className="absolute inset-0 size-full object-cover" />
+          </div>
+          <p className="text-[11px] leading-4 text-shamba-ink-soft">
+            <CoverCredit cover={cover} />
+          </p>
         </div>
       )}
 

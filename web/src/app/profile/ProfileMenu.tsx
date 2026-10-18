@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { MoreVertical } from "lucide-react";
 import type { SettingsSectionId } from "./settingsSections";
 
@@ -34,9 +35,13 @@ const FARMER_LINKS: MenuLink[] = [
 
 export function ProfileMenu({
   isPublic,
+  isVerifiedExpert,
+  isAdmin,
   onSelectSection,
 }: {
   isPublic: boolean;
+  isVerifiedExpert: boolean;
+  isAdmin: boolean;
   onSelectSection: (sectionId: SettingsSectionId) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -189,6 +194,46 @@ export function ProfileMenu({
               {link.label}
             </button>
           ))}
+
+          <div className="my-1.5 border-t border-shamba-line" />
+
+          <p className="px-3 pt-1.5 pb-1 font-mono text-xs font-semibold uppercase tracking-wide text-shamba-ink-soft">
+            Experts
+          </p>
+          {/* Plain navigation, not a settings panel. /experts/apply picks
+              the right view itself (intro, the form, or the application's
+              status), so anyone with an application in progress lands on
+              it. No separate public expert page exists yet, so an active
+              expert's "My expert profile" also opens there, on the
+              approved status view. */}
+          <Link
+            href="/experts/apply"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green relative touch-target"
+          >
+            {isVerifiedExpert ? "My expert profile" : "Become a verified expert"}
+          </Link>
+
+          {/* Admins only (staff_roles). The admin pages re-check this on
+              the server and 404 for anyone else. */}
+          {isAdmin && (
+            <>
+              <div className="my-1.5 border-t border-shamba-line" />
+
+              <p className="px-3 pt-1.5 pb-1 font-mono text-xs font-semibold uppercase tracking-wide text-shamba-ink-soft">
+                Admin
+              </p>
+              <Link
+                href="/admin/experts"
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className="block w-full rounded-shamba px-3 py-2 text-left font-sans text-sm text-shamba-ink transition-colors hover:bg-shamba-bg focus:outline-none focus:ring-2 focus:ring-shamba-green relative touch-target"
+              >
+                Expert verification
+              </Link>
+            </>
+          )}
         </div>
       )}
     </div>

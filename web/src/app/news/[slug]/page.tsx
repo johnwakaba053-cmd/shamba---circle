@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { cache } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
+import { AppHeader } from "@/components/AppHeader";
+import { signNewsMediaPaths } from "@/lib/newsMedia";
 import { createClient } from "@/lib/supabase/server";
 import { fetchMarketPricesForProducts, type MarketPriceCard } from "@/lib/marketPrices";
 import {
@@ -12,7 +14,6 @@ import {
   formatNewsDate,
   isNewsSlug,
   newsArticlePath,
-  newsCoverUrl,
   newsDisplayStatus,
   newsPlaceLabel,
   parseNewsBody,
@@ -32,8 +33,6 @@ import {
 import { NewsCard } from "../NewsCard";
 import { NewsCoverImage } from "../NewsCoverImage";
 import { NewsFormatBadge } from "../NewsFormatBadge";
-import { NewsHeader } from "../NewsHeader";
-import { NewsJoinCallout } from "../NewsJoinCallout";
 import { NewsPricePanel } from "../NewsPricePanel";
 import { NewsStatusBadge } from "../NewsStatusBadge";
 import { PhotoStoryGallery, type PhotoStoryPhoto } from "../PhotoStoryGallery";
@@ -95,7 +94,16 @@ const loadArticle = cache(async (slug: string) => {
   } = await supabase.auth.getUser();
 
   if (!isNewsSlug(slug)) {
-    return { supabase, user, article: null, photos: [], videoId: null, durationSeconds: null, error: false };
+    return {
+      supabase,
+      user,
+      article: null,
+      coverUrl: null,
+      photos: [],
+      videoId: null,
+      durationSeconds: null,
+      error: false,
+    };
   }
 
   const { data, error } = await supabase
@@ -108,21 +116,32 @@ const loadArticle = cache(async (slug: string) => {
   let photos: PhotoStoryPhoto[] = [];
   let videoId: string | null = null;
   let durationSeconds: number | null = null;
+  let mediaRows: MediaRow[] = [];
 
   if (article && (article.format === "photo_story" || article.format === "video")) {
-    const { data: mediaRows } = await supabase
+    const { data } = await supabase
       .from("news_media")
       .select("id, kind, storage_path, embed_id, alt, caption, credit, width, height, duration_seconds")
       .eq("article_id", article.id)
       .order("sort_order", { ascending: true })
       .order("created_at", { ascending: true });
+    mediaRows = (data ?? []) as MediaRow[];
+  }
 
-    for (const row of (mediaRows ?? []) as MediaRow[]) {
+  // The cover and photos are in the private news-media bucket: one
+  // signing request for all of them (lib/newsMedia.ts).
+  const urls = article
+    ? await signNewsMediaPaths(supabase, [article.cover_image_path, ...mediaRows.map((row) => row.storage_path)])
+    : new Map<string, string>();
+  const coverUrl = article?.cover_image_path ? (urls.get(article.cover_image_path) ?? null) : null;
+
+  if (article) {
+    for (const row of mediaRows) {
       if (row.kind === "video_embed" && !videoId && isYouTubeVideoId(row.embed_id)) {
         videoId = row.embed_id;
         durationSeconds = row.duration_seconds;
       } else if (row.kind === "image") {
-        const url = newsCoverUrl(row.storage_path);
+        const url = row.storage_path ? urls.get(row.storage_path) : undefined;
         // N4 requires alt and credit on every image; skip a row that
         // somehow lacks them rather than show an uncredited photo.
         if (url && row.alt && row.credit) {
@@ -144,14 +163,19 @@ const loadArticle = cache(async (slug: string) => {
     if (article.format !== "photo_story") photos = [];
   }
 
-  return { supabase, user, article, photos, videoId, durationSeconds, error: Boolean(error) };
+  return { supabase, user, article, coverUrl, photos, videoId, durationSeconds, error: Boolean(error) };
 });
 
 export async function generateMetadata({ params }: NewsArticlePageProps): Promise<Metadata> {
   const { slug } = await params;
-  const [{ article, photos, videoId }, origin] = await Promise.all([loadArticle(slug), newsSiteOrigin()]);
+  const [{ user, article, coverUrl, photos, videoId }, origin] = await Promise.all([
+    loadArticle(slug),
+    newsSiteOrigin(),
+  ]);
 
-  if (!article) {
+  // Signed out: the page sends them to sign-in, so say nothing about the
+  // story here either.
+  if (!user || !article) {
     return { title: `Agriculture Today — ${NEWS_SITE_NAME}`, robots: { index: false, follow: false } };
   }
 
@@ -162,9 +186,8 @@ export async function generateMetadata({ params }: NewsArticlePageProps): Promis
 
   // Share picture: the cover, else a photo story's first photo, else the
   // video's YouTube still, else the app icon.
-  const cover = newsCoverUrl(article.cover_image_path);
-  const picture = cover
-    ? { url: cover, alt: article.cover_image_alt ?? article.title }
+  const picture = coverUrl
+    ? { url: coverUrl, alt: article.cover_image_alt ?? article.title }
     : photos[0]
       ? { url: photos[0].url, alt: photos[0].alt }
       : videoId
@@ -202,7 +225,11 @@ export async function generateMetadata({ params }: NewsArticlePageProps): Promis
 
 export default async function NewsArticlePage({ params }: NewsArticlePageProps) {
   const { slug } = await params;
-  const { supabase, user, article, photos, videoId, durationSeconds, error } = await loadArticle(slug);
+  const { supabase, user, article, coverUrl, photos, videoId, durationSeconds, error } = await loadArticle(slug);
+
+  if (!user) {
+    redirect("/sign-in");
+  }
 
   if (!error && !article) {
     notFound();
@@ -217,11 +244,9 @@ export default async function NewsArticlePage({ params }: NewsArticlePageProps) 
   const isVideo = article?.format === "video" && Boolean(videoId);
 
   // "More from <topic>" (up to three other live stories in the same
-  // topic) and, for a market update, the linked products' live prices --
-  // signed-in only (prices stay protected); null means "show the
-  // sign-in prompt".
+  // topic) and, for a market update, the linked products' live prices.
   let related: NewsCardData[] = [];
-  let prices: MarketPriceCard[] | null = null;
+  let prices: MarketPriceCard[] = [];
   if (article) {
     const [relatedResult, priceCards] = await Promise.all([
       liveNewsArticles(supabase, new Date().toISOString())
@@ -229,7 +254,7 @@ export default async function NewsArticlePage({ params }: NewsArticlePageProps) 
         .neq("id", article.id)
         .order("published_at", { ascending: false })
         .limit(3),
-      article.format === "market_update" && user
+      article.format === "market_update"
         ? supabase
             .from("news_article_price_products")
             .select("product_id")
@@ -241,7 +266,7 @@ export default async function NewsArticlePage({ params }: NewsArticlePageProps) 
                 (data ?? []).map((row) => row.product_id as string),
               ),
             )
-        : Promise.resolve(null),
+        : Promise.resolve([]),
     ]);
     related = (relatedResult.data ?? []) as unknown as NewsCardData[];
     prices = priceCards;
@@ -250,7 +275,7 @@ export default async function NewsArticlePage({ params }: NewsArticlePageProps) 
 
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
-      <NewsHeader signedIn={Boolean(user)} />
+      <AppHeader />
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center gap-10 px-6 pb-20 pt-6 sm:px-10 sm:pt-10">
         <div className="w-full max-w-2xl">
@@ -347,9 +372,9 @@ export default async function NewsArticlePage({ params }: NewsArticlePageProps) 
                 </a>
               </div>
             ) : (
-              article.cover_image_path && (
+              coverUrl && (
                 <figure className="mt-6">
-                  <NewsCoverImage path={article.cover_image_path} alt={article.cover_image_alt} priority />
+                  <NewsCoverImage src={coverUrl} alt={article.cover_image_alt} priority />
                   {article.cover_image_credit && (
                     <figcaption className="mt-2 font-mono text-xs text-shamba-ink-soft">
                       Photo: {article.cover_image_credit}
@@ -432,12 +457,6 @@ export default async function NewsArticlePage({ params }: NewsArticlePageProps) 
               ))}
             </div>
           </section>
-        )}
-
-        {!user && (
-          <div className="w-full">
-            <NewsJoinCallout />
-          </div>
         )}
       </main>
     </div>

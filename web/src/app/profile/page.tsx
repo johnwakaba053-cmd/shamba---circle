@@ -6,6 +6,7 @@ import { RoleBadges } from "./RoleBadges";
 import { ProfileSettingsHost } from "./ProfileSettingsHost";
 import { ProfilePostGrid } from "./ProfilePostGrid";
 import { fetchProfileReels } from "./profilePosts";
+import { isAdmin } from "@/lib/staff";
 
 const SIGNED_URL_EXPIRY_SECONDS = 3600;
 
@@ -47,7 +48,9 @@ export default async function Profile() {
     { data: livestockPreferences },
     { data: alertPreferences },
     { data: roleRows },
+    { data: expertRow },
     reels,
+    isStaffAdmin,
   ] = await Promise.all([
     supabase.from("counties").select("id, name").order("name"),
     supabase.from("crop_types").select("id, name").order("name"),
@@ -60,10 +63,17 @@ export default async function Profile() {
     // auth.uid()) -- same "no explicit .eq needed" convention already
     // used by the crop/livestock preference queries above.
     supabase.from("user_roles").select("role"),
+    // Only an active expert gets "My expert profile" in the menu; a
+    // failed lookup falls back to "Become a verified expert", whose
+    // /experts/apply page resolves the real status itself.
+    supabase.from("experts").select("status").eq("profile_id", user.id).maybeSingle(),
     // Owner viewing their own posts: get_profile_posts() always allows
     // this (auth.uid() = p_profile_id branch of can_view_profile_posts),
     // same sanctioned RPC path used for any other profile.
     fetchProfileReels(supabase, user.id, user.id),
+    // Shows the admin-only "Expert verification" link in the menu. The
+    // admin pages check again themselves.
+    isAdmin(supabase),
   ]);
 
   const enabledByType = Object.fromEntries(
@@ -121,6 +131,8 @@ export default async function Profile() {
                   <ProfileSettingsHost
                     userId={user.id}
                     isPublic={profile.profile_visibility === "public"}
+                    isVerifiedExpert={expertRow?.status === "active"}
+                    isAdmin={isStaffAdmin}
                     initialDisplayName={profile.display_name ?? ""}
                     initialBio={profile.bio ?? ""}
                     initialVisibility={profile.profile_visibility as "public" | "private"}

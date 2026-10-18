@@ -1,36 +1,39 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, ArrowRight, CirclePlay, Cpu, Images, Newspaper, Scale, Star, TrendingUp } from "lucide-react";
+import { redirect } from "next/navigation";
+import { ArrowLeft, ArrowRight } from "lucide-react";
+import { AppHeader } from "@/components/AppHeader";
 import { createClient } from "@/lib/supabase/server";
-import { fetchRecentMarketPrices, type MarketPriceCard } from "@/lib/marketPrices";
 import {
   NEWS_FORMAT_FILTER_LABELS,
   NEWS_REGION_LABELS,
   buildNewsHref,
-  formatNewsToday,
   isNewsFormat,
   isNewsRegion,
   parseNewsPage,
-  type NewsCardData,
   type NewsHrefParams,
+  type NewsRegion,
 } from "@/lib/news";
-import { FeaturedNewsCard } from "./FeaturedNewsCard";
-import { MarketsPanel } from "./MarketsPanel";
-import { NewsCard } from "./NewsCard";
-import { NewsBrowseAll, NewsFilters } from "./NewsFilters";
-import { NewsHeader } from "./NewsHeader";
-import { NewsJoinCallout } from "./NewsJoinCallout";
-import { NewsSection } from "./NewsSection";
-import { PhotoStoryCard } from "./PhotoStoryCard";
-import { TrendingList } from "./TrendingList";
-import { fetchNewsHome, fetchNewsList, type NewsCardMedia, type NewsHome } from "./newsData";
+import { NewsByRegion } from "./NewsByRegion";
+import { NewsFilters } from "./NewsFilters";
+import { NewsHero } from "./NewsHero";
+import { NewsRegionTabs } from "./NewsRegionTabs";
+import { NewsStoryRow } from "./NewsStoryRow";
+import { NewsTrendingPanel } from "./NewsTrendingPanel";
+import { NewsVideosPanel } from "./NewsVideosPanel";
+import { fetchNewsFront } from "./newsData";
 import { NEWS_FALLBACK_IMAGE, NEWS_SITE_NAME, newsSiteOrigin } from "./newsMetadata";
 
 const TITLE = "Agriculture Today";
 const DESCRIPTION = "Farming news from Kenya, Africa and the world: markets, farm technology, innovation and more.";
 
-// How many live price cards a signed-in reader sees in Markets & Prices.
-const MARKET_PRICE_CARDS = 4;
+// The line under the feed's heading on the Latest and region tabs.
+const FEED_INTRO: Record<NewsRegion | "latest", string> = {
+  latest: "Current agribusiness and farming news from Kenya, Africa and around the world.",
+  kenya: "Farming and agribusiness news from across Kenya.",
+  africa: "Farming and agribusiness news from across Africa.",
+  global: "Farming and agribusiness news from around the world.",
+};
 
 export async function generateMetadata(): Promise<Metadata> {
   const origin = await newsSiteOrigin();
@@ -53,15 +56,16 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-// /news -- Agriculture Today. Public: no sign-in redirect.
+// /news -- Agriculture Today. Members only, like the rest of the app:
+// signed-out visitors go to sign-in.
 //
-// The unfiltered first page is the front page, in this order: Trending,
-// Featured, Watch, Photo Stories, Markets & Prices, Farm Tech & AI, then
-// Latest with the filters. Each story appears once (see fetchNewsHome)
-// and an empty section isn't shown; when every story is already in the
-// sections, Latest becomes a compact "Browse all stories" row. A
-// filtered view, page 2 onward, or ?view=all (that row's "More
-// filters") is just the filters and one newest-first list.
+// Laid out like a news front page: the Agriculture Today banner, the
+// Latest / Kenya / Africa / Global tabs, then the story feed beside a
+// sidebar of Trending in Agriculture, Videos and By Region (below the
+// feed on phones). The feed is Latest -- on the unfiltered
+// first page the editor's Featured stories lead it -- or a region tab,
+// or whatever the filters pick, newest first, with paging. Only live
+// stories ever show (fetchNewsFront); drafts stay on /admin/news.
 export default async function NewsPage({
   searchParams,
 }: {
@@ -72,6 +76,11 @@ export default async function NewsPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/sign-in");
+  }
+
   const now = new Date();
 
   const { data: categoryRows, error: categoriesError } = await supabase
@@ -90,52 +99,37 @@ export default async function NewsPage({
   const current: NewsHrefParams = { format, region, category, page };
   const isFiltered = Boolean(format || region || category);
   const viewAll = params.view === "all";
-  const isFrontPage = !isFiltered && page === 1 && !viewAll;
+  const frontPage = !isFiltered && page === 1 && !viewAll;
 
-  let home: NewsHome | null = null;
-  let list: { articles: NewsCardData[]; hasOlder: boolean; media: Map<string, NewsCardMedia>; error: boolean };
-  // Live prices only for a signed-in reader (prices stay signed-in only);
-  // null means "show the sign-in prompt".
-  let prices: MarketPriceCard[] | null = null;
+  const front = await fetchNewsFront(supabase, now, { format, region, category, page, frontPage });
+  const hasError = Boolean(categoriesError || front.error);
+  const { feed, media } = front;
 
-  if (isFrontPage) {
-    const [homeResult, priceCards] = await Promise.all([
-      fetchNewsHome(supabase, now),
-      user ? fetchRecentMarketPrices(supabase) : Promise.resolve(null),
-    ]);
-    home = homeResult;
-    prices = priceCards ? priceCards.slice(0, MARKET_PRICE_CARDS) : null;
-    list = { articles: home.latest, hasOlder: home.hasOlder, media: home.media, error: home.error };
-  } else {
-    list = await fetchNewsList(supabase, now, { format, region, category, page });
-  }
-
-  const hasError = Boolean(categoriesError || list.error);
-  const media = list.media;
-  const filterLabel = [
-    format ? NEWS_FORMAT_FILTER_LABELS[format] : null,
-    region ? NEWS_REGION_LABELS[region] : null,
-    category ? categories.find((c) => c.id === category)?.name : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  // A region tab reads "Kenya Agriculture News"; any other filter is
+  // named the way the filters name it.
+  const byFormatOrTopic = Boolean(format || category);
+  const feedTitle = byFormatOrTopic
+    ? [
+        format ? NEWS_FORMAT_FILTER_LABELS[format] : null,
+        region ? NEWS_REGION_LABELS[region] : null,
+        category ? categories.find((c) => c.id === category)?.name : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : region
+      ? `${NEWS_REGION_LABELS[region]} Agriculture News`
+      : viewAll
+        ? "All stories"
+        : "Latest Agriculture News";
+  const feedIntro = byFormatOrTopic ? null : FEED_INTRO[region ?? "latest"];
 
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
-      <NewsHeader signedIn={Boolean(user)} />
+      <AppHeader />
+      <NewsHero now={now} />
 
-      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-12 px-6 pb-20 pt-8 sm:px-10 sm:pt-12">
-        <div>
-          <p className="font-mono text-xs font-medium uppercase tracking-wider text-shamba-ochre">
-            {formatNewsToday(now)}
-          </p>
-          <h1 className="mt-2 font-display text-3xl font-bold leading-tight tracking-tight text-shamba-ink sm:text-4xl">
-            {TITLE}
-          </h1>
-          <p className="mt-2 max-w-2xl text-base leading-7 text-shamba-ink-soft">
-            Farming news from Kenya, Africa and the world: markets and prices, farm technology, innovation and more.
-          </p>
-        </div>
+      <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 pb-20 pt-6 sm:px-10">
+        <NewsRegionTabs region={region} />
 
         {hasError && (
           <p role="alert" className="rounded-shamba border border-shamba-line bg-shamba-card p-4 text-sm font-semibold text-shamba-rust">
@@ -143,213 +137,95 @@ export default async function NewsPage({
           </p>
         )}
 
-        {!hasError && home && <FrontPageSections home={home} prices={prices} />}
-
-        {!hasError && isFrontPage && list.articles.length === 0 && (
-          <NewsBrowseAll olderHref={list.hasOlder ? buildNewsHref({}, { page: 2 }) : null} />
-        )}
-
-        {!hasError && !(isFrontPage && list.articles.length === 0) && (
-          <NewsSection
-            id="latest"
-            title={isFiltered ? filterLabel : viewAll ? "All stories" : "Latest stories"}
-            icon={Newspaper}
-            tone="bg-shamba-green/10 text-shamba-green"
-          >
-            {page > 1 && <p className="-mt-2 font-mono text-xs text-shamba-ink-soft">Page {page}</p>}
-
-            <NewsFilters current={current} categories={categories} />
-
-            {list.articles.length > 0 ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {list.articles.map((article) => (
-                  <NewsCard key={article.id} article={article} media={media.get(article.id)} />
-                ))}
+        {!hasError && (
+          <div className="grid grid-cols-1 gap-10 md:grid-cols-[minmax(0,1fr)_16rem] md:gap-6 lg:grid-cols-3 lg:gap-8">
+            <section aria-labelledby="news-feed-heading" className="flex min-w-0 flex-col gap-5 lg:col-span-2">
+              <div>
+                <div className="flex items-start justify-between gap-3">
+                  <h2
+                    id="news-feed-heading"
+                    className="font-display text-2xl font-bold leading-tight tracking-tight text-shamba-ink sm:text-3xl"
+                  >
+                    {feedTitle}
+                  </h2>
+                  <NewsFilters current={current} categories={categories} />
+                </div>
+                {feedIntro && <p className="mt-1 text-base leading-7 text-shamba-ink-soft">{feedIntro}</p>}
+                {page > 1 && <p className="mt-1 font-mono text-xs text-shamba-ink-soft">Page {page}</p>}
               </div>
-            ) : (
-              <div className="rounded-shamba border border-dashed border-shamba-line bg-shamba-card p-6 text-center">
-                <p className="font-display text-base font-bold text-shamba-ink">
-                  {isFiltered ? "No stories here yet" : page > 1 ? "No more stories" : "No stories yet"}
-                </p>
-                <p className="mt-1 text-sm leading-6 text-shamba-ink-soft">
-                  {isFiltered
-                    ? "Try another format, region or topic, or see all the news."
-                    : "New farming stories appear here as soon as they're published."}
-                </p>
-                {isFiltered && (
-                  <Link
-                    href="/news"
-                    className="mt-4 inline-flex min-h-11 items-center justify-center rounded-shamba border border-shamba-line px-4 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg"
-                  >
-                    See all news
-                  </Link>
-                )}
-              </div>
-            )}
 
-            {(page > 1 || list.hasOlder) && (
-              <nav aria-label="More stories" className="flex flex-wrap items-center justify-between gap-3">
-                {page > 1 ? (
-                  <Link
-                    href={buildNewsHref(current, { page: page - 1 })}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-shamba border border-shamba-line px-4 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-card"
-                  >
-                    <ArrowLeft className="size-4" aria-hidden="true" />
-                    Newer stories
-                  </Link>
-                ) : (
-                  <span />
-                )}
-                {list.hasOlder && (
-                  <Link
-                    href={buildNewsHref(current, { page: page + 1 })}
-                    className="inline-flex min-h-11 items-center gap-2 rounded-shamba border border-shamba-line px-4 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-card"
-                  >
-                    Older stories
-                    <ArrowRight className="size-4" aria-hidden="true" />
-                  </Link>
-                )}
-              </nav>
-            )}
-          </NewsSection>
-        )}
-
-        {!user && <NewsJoinCallout />}
-      </main>
-    </div>
-  );
-}
-
-// Trending -> Featured -> Watch -> Photo Stories -> Markets & Prices ->
-// Farm Tech & AI. On phones that's the reading order top to bottom.
-//
-// From md up, the top row is balanced: the lead Featured story beside
-// Trending, both stretched to the same height -- 3:2 on tablets (so
-// Trending's titles aren't squeezed), 2:1 from lg; any other Featured stories follow in a full-width row below --
-// a lone one as a compact horizontal card, two side by side. This is CSS
-// grid placement only, so the document (and screen-reader) order stays
-// Trending, Featured, more Featured.
-function FrontPageSections({ home, prices }: { home: NewsHome; prices: MarketPriceCard[] | null }) {
-  const { trending, featured, watch, photoStories, markets, farmTech, media } = home;
-  const [lead, ...moreFeatured] = featured;
-  const both = trending.length > 0 && Boolean(lead);
-
-  return (
-    <>
-      {(trending.length > 0 || lead) && (
-        <div className="grid grid-cols-1 gap-y-12 md:grid-cols-5 md:gap-x-6 md:gap-y-6 lg:grid-cols-3 lg:gap-x-8">
-          {trending.length > 0 && (
-            <NewsSection
-              id="trending"
-              title="Trending"
-              icon={TrendingUp}
-              tone="bg-shamba-ochre/15 text-shamba-ochre"
-              className={
-                both
-                  ? "md:col-span-2 md:col-start-4 md:row-start-1 lg:col-span-1 lg:col-start-3"
-                  : "md:col-span-5 lg:col-span-3"
-              }
-            >
-              <TrendingList articles={trending} />
-            </NewsSection>
-          )}
-
-          {lead && (
-            <NewsSection
-              id="featured"
-              title="Featured"
-              icon={Star}
-              tone="bg-shamba-green/10 text-shamba-green"
-              className={
-                both
-                  ? "md:col-span-3 md:col-start-1 md:row-start-1 lg:col-span-2"
-                  : "md:col-span-5 lg:col-span-3"
-              }
-            >
-              <FeaturedNewsCard article={lead} media={media.get(lead.id)} className="flex-1" />
-            </NewsSection>
-          )}
-
-          {moreFeatured.length > 0 && (
-            // Still the editor's Featured picks, just laid out below the
-            // top row. -mt-8 pulls it up to the lead card on phones (the
-            // grid's 48px section gap is meant for separate sections).
-            <section aria-label="More featured stories" className="-mt-8 md:col-span-5 md:mt-0 lg:col-span-3">
-              {moreFeatured.length === 1 ? (
-                <NewsCard article={moreFeatured[0]} media={media.get(moreFeatured[0].id)} layout="horizontal" />
-              ) : (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {moreFeatured.map((article) => (
-                    <NewsCard key={article.id} article={article} media={media.get(article.id)} />
+              {feed.length > 0 ? (
+                <div className="flex flex-col gap-4">
+                  {feed.map((article, index) => (
+                    <NewsStoryRow
+                      key={article.id}
+                      article={article}
+                      media={media.get(article.id)}
+                      now={now}
+                      priority={index === 0}
+                    />
                   ))}
                 </div>
+              ) : (
+                <div className="rounded-shamba border border-dashed border-shamba-line bg-shamba-card p-6 text-center">
+                  <p className="font-display text-base font-bold text-shamba-ink">
+                    {isFiltered ? "No stories here yet" : page > 1 ? "No more stories" : "No stories yet"}
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-shamba-ink-soft">
+                    {isFiltered
+                      ? "Try another region, format or topic, or see all the news."
+                      : "New farming stories appear here as soon as they're published."}
+                  </p>
+                  {isFiltered && (
+                    <Link
+                      href="/news"
+                      className="mt-4 inline-flex min-h-11 items-center justify-center rounded-shamba border border-shamba-line px-4 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-bg"
+                    >
+                      See all news
+                    </Link>
+                  )}
+                </div>
+              )}
+
+              {(page > 1 || front.hasOlder) && (
+                <nav aria-label="More stories" className="flex flex-wrap items-center justify-between gap-3">
+                  {page > 1 ? (
+                    <Link
+                      href={buildNewsHref(current, { page: page - 1 })}
+                      className="inline-flex min-h-11 items-center gap-2 rounded-shamba border border-shamba-line px-4 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-card"
+                    >
+                      <ArrowLeft className="size-4" aria-hidden="true" />
+                      Newer stories
+                    </Link>
+                  ) : (
+                    <span />
+                  )}
+                  {front.hasOlder && (
+                    <Link
+                      href={buildNewsHref(current, { page: page + 1 })}
+                      className="inline-flex min-h-11 items-center gap-2 rounded-shamba border border-shamba-line px-4 font-sans text-sm font-semibold text-shamba-ink transition-colors hover:bg-shamba-card"
+                    >
+                      Older stories
+                      <ArrowRight className="size-4" aria-hidden="true" />
+                    </Link>
+                  )}
+                </nav>
               )}
             </section>
-          )}
-        </div>
-      )}
 
-      {watch.length > 0 && (
-        <NewsSection
-          id="watch"
-          title="Watch"
-          icon={CirclePlay}
-          tone="bg-shamba-rust/10 text-shamba-rust"
-          seeAllHref={buildNewsHref({}, { format: "video" })}
-          seeAllLabel="All videos"
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {watch.map((article) => (
-              <NewsCard key={article.id} article={article} media={media.get(article.id)} />
-            ))}
-          </div>
-        </NewsSection>
-      )}
-
-      {photoStories.length > 0 && (
-        <NewsSection
-          id="photo-stories"
-          title="Photo Stories"
-          icon={Images}
-          tone="bg-shamba-ochre/15 text-shamba-ochre"
-          seeAllHref={buildNewsHref({}, { format: "photo_story" })}
-          seeAllLabel="All photo stories"
-        >
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {photoStories.map((article) => (
-              <PhotoStoryCard key={article.id} article={article} media={media.get(article.id)} />
-            ))}
-          </div>
-        </NewsSection>
-      )}
-
-      <NewsSection
-        id="markets"
-        title="Markets & Prices"
-        icon={Scale}
-        tone="bg-shamba-blue/10 text-shamba-blue"
-        seeAllHref={buildNewsHref({}, { category: "markets-prices" })}
-        seeAllLabel="Market news"
-      >
-        <MarketsPanel prices={prices} />
-        {markets.length > 0 && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {markets.map((article) => (
-              <NewsCard key={article.id} article={article} media={media.get(article.id)} />
-            ))}
+            {/* The sidebar, on the right from md up: the same on every view.
+                Trending hides when too few stories qualify; Videos and By
+                Region always show. */}
+            <div className="flex min-w-0 flex-col gap-6">
+              {front.trending.length > 0 && (
+                <NewsTrendingPanel articles={front.trending} media={media} now={now} />
+              )}
+              <NewsVideosPanel articles={front.videos} media={media} now={now} />
+              <NewsByRegion />
+            </div>
           </div>
         )}
-      </NewsSection>
-
-      {farmTech.length > 0 && (
-        <NewsSection id="farm-tech" title="Farm Tech & AI" icon={Cpu} tone="bg-shamba-green/10 text-shamba-green">
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {farmTech.map((article) => (
-              <NewsCard key={article.id} article={article} media={media.get(article.id)} />
-            ))}
-          </div>
-        </NewsSection>
-      )}
-    </>
+      </main>
+    </div>
   );
 }

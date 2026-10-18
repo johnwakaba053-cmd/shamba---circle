@@ -26,6 +26,8 @@ type AlertType = "weather" | "pest_disease" | "market_price";
 export function ProfileSettingsHost({
   userId,
   isPublic,
+  isVerifiedExpert,
+  isAdmin,
   initialDisplayName,
   initialBio,
   initialVisibility,
@@ -39,6 +41,8 @@ export function ProfileSettingsHost({
 }: {
   userId: string;
   isPublic: boolean;
+  isVerifiedExpert: boolean;
+  isAdmin: boolean;
   initialDisplayName: string;
   initialBio: string;
   initialVisibility: "public" | "private";
@@ -77,7 +81,12 @@ export function ProfileSettingsHost({
 
   return (
     <>
-      <ProfileMenu isPublic={isPublic} onSelectSection={setActiveSection} />
+      <ProfileMenu
+        isPublic={isPublic}
+        isVerifiedExpert={isVerifiedExpert}
+        isAdmin={isAdmin}
+        onSelectSection={setActiveSection}
+      />
 
       <div
         ref={containerRef}

@@ -3,6 +3,9 @@ import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
+import { fetchEducationCovers } from "@/lib/educationMedia";
+import { CoverCredit } from "../CoverCredit";
+import { HideOnErrorImage } from "../HideOnErrorImage";
 import {
   EDUCATION_CATEGORY_ICON,
   EDUCATION_CATEGORY_FALLBACK_ICON,
@@ -68,16 +71,23 @@ export default async function EducationResource({
   // unpublished rows from ever being returned, and this filter keeps that
   // same rule explicit here so the page can't accidentally start showing
   // draft content if the policy ever changes.
-  const { data, error } = await supabase
-    .from("education_resources")
-    .select(
-      "id, category_id, topic_id, learning_category, resource_type, origin, external_url, storage_path, title, summary, content, source_name, source_url, published_at, youtube_url, duration_seconds, video_published_at, language, education_categories(name), education_topics(name, emoji), education_sources(name, url)",
-    )
-    .eq("id", id)
-    .eq("is_published", true)
-    .maybeSingle();
+  //
+  // The licensed cover photo (lib/educationMedia.ts) loads alongside it;
+  // none for most guides, and never shown on a video.
+  const [{ data, error }, covers] = await Promise.all([
+    supabase
+      .from("education_resources")
+      .select(
+        "id, category_id, topic_id, learning_category, resource_type, origin, external_url, storage_path, title, summary, content, source_name, source_url, published_at, youtube_url, duration_seconds, video_published_at, language, education_categories(name), education_topics(name, emoji), education_sources(name, url)",
+      )
+      .eq("id", id)
+      .eq("is_published", true)
+      .maybeSingle(),
+    fetchEducationCovers(supabase, [id], "page"),
+  ]);
 
   const resource = data as EducationResourceDetail | null;
+  const cover = resource && resource.resource_type !== "video" ? covers.get(resource.id) : undefined;
 
   if (!error && !resource) {
     notFound();
@@ -206,6 +216,26 @@ export default async function EducationResource({
             <p className="mt-2 font-mono text-xs text-shamba-ink-soft">
               Published {new Date(resource.published_at).toLocaleDateString()}
             </p>
+
+            {/* Only when the guide has a licensed cover; otherwise the page
+                is exactly as before. The alt text describes the photo, and
+                the caption gives the attribution its licence requires.
+                Photo and caption are hidden together if the file fails. */}
+            {cover && (
+              <figure data-cover className="mt-4 flex flex-col gap-1.5">
+                <div className="relative aspect-video w-full overflow-hidden rounded-shamba border border-shamba-line bg-shamba-bg">
+                  <HideOnErrorImage
+                    src={cover.src}
+                    alt={cover.alt}
+                    priority
+                    className="absolute inset-0 size-full object-cover"
+                  />
+                </div>
+                <figcaption className="text-xs leading-5 text-shamba-ink-soft">
+                  <CoverCredit cover={cover} linked />
+                </figcaption>
+              </figure>
+            )}
 
             {resource.resource_type === "video" &&
               (videoDuration || resource.video_published_at) && (

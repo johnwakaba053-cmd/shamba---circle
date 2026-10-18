@@ -1,0 +1,172 @@
+[
+  {
+    "file": "shamba-space-indigenous-chicken-guide/cover-1280.webp",
+    "bytes": 283644,
+    "pixels": "1280x720",
+    "quality": 45,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "65ef6e4e86e9233207845f631049b9294855f7f6",
+    "source": "1b-chicken-kuria-east.jpg",
+    "crop_box": [
+      0,
+      1100,
+      3072,
+      2828
+    ],
+    "source_icc": "none"
+  },
+  {
+    "file": "shamba-space-indigenous-chicken-guide/cover-640.webp",
+    "bytes": 109060,
+    "pixels": "640x360",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "dc548ea93cc86f4330c30b58b3c14ef72cd68cd5",
+    "source": "1b-chicken-kuria-east.jpg",
+    "crop_box": [
+      0,
+      1100,
+      3072,
+      2828
+    ],
+    "source_icc": "none"
+  },
+  {
+    "file": "shamba-space-rabbits-guide/cover-1280.webp",
+    "bytes": 107816,
+    "pixels": "1280x720",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "221e0b3b69492d13eb1a964781687dda4e608a3e",
+    "source": "2b-rabbits-mlinza-01.jpg",
+    "crop_box": [
+      0,
+      236,
+      4496,
+      2765
+    ],
+    "source_icc": "sRGB IEC61966-2.1 (dropped)"
+  },
+  {
+    "file": "shamba-space-rabbits-guide/cover-640.webp",
+    "bytes": 40594,
+    "pixels": "640x360",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "8c01918fb60768479e65579fe0a50b79b2491157",
+    "source": "2b-rabbits-mlinza-01.jpg",
+    "crop_box": [
+      0,
+      236,
+      4496,
+      2765
+    ],
+    "source_icc": "sRGB IEC61966-2.1 (dropped)"
+  },
+  {
+    "file": "shamba-space-beekeeping-guide/cover-1280.webp",
+    "bytes": 208604,
+    "pixels": "1280x720",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "28a08f3d8233680f611fb174db1f7a28c6dd1a3c",
+    "source": "3-beekeeping.jpg",
+    "crop_box": [
+      0,
+      109,
+      1296,
+      838
+    ],
+    "source_icc": "none"
+  },
+  {
+    "file": "shamba-space-beekeeping-guide/cover-640.webp",
+    "bytes": 65510,
+    "pixels": "640x360",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "0c88e04fbeaae71ca9aac487c97ba044243ccfff",
+    "source": "3-beekeeping.jpg",
+    "crop_box": [
+      0,
+      109,
+      1296,
+      838
+    ],
+    "source_icc": "none"
+  },
+  {
+    "file": "shamba-space-avocado-guide/cover-1280.webp",
+    "bytes": 246188,
+    "pixels": "1280x720",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "311d245056013cb3992ac5556594bb468f423a7c",
+    "source": "4b-avocado-replacement.jpg",
+    "crop_box": [
+      0,
+      722,
+      3120,
+      2477
+    ],
+    "source_icc": "none"
+  },
+  {
+    "file": "shamba-space-avocado-guide/cover-640.webp",
+    "bytes": 76588,
+    "pixels": "640x360",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "a6bedf49e4ad03491769c528526f48a6c85c67e3",
+    "source": "4b-avocado-replacement.jpg",
+    "crop_box": [
+      0,
+      722,
+      3120,
+      2477
+    ],
+    "source_icc": "none"
+  },
+  {
+    "file": "shamba-space-maize-guide/cover-1280.webp",
+    "bytes": 86060,
+    "pixels": "1280x720",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "62969cfc3df944b21575c63b336d5a66e0bdfd61",
+    "source": "5-maize.jpg",
+    "crop_box": [
+      0,
+      13,
+      4288,
+      2425
+    ],
+    "source_icc": "Adobe RGB (1998) (converted to sRGB, dropped)"
+  },
+  {
+    "file": "shamba-space-maize-guide/cover-640.webp",
+    "bytes": 34160,
+    "pixels": "640x360",
+    "quality": 82,
+    "metadata_left": "none",
+    "exif_tags": 0,
+    "sha1": "e79361d46a1eb33694d646bb37cb64c4541ae8d4",
+    "source": "5-maize.jpg",
+    "crop_box": [
+      0,
+      13,
+      4288,
+      2425
+    ],
+    "source_icc": "Adobe RGB (1998) (converted to sRGB, dropped)"
+  }
+]
