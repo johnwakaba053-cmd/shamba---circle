@@ -28,6 +28,10 @@ export function NewsStoryPicture({
   const hasImage = Boolean(newsCardImageSrc(article, media));
   const Icon = NEWS_CATEGORY_ICON[article.category_id] ?? NEWS_CATEGORY_FALLBACK_ICON;
   const small = size === "small";
+  // A video's play mark sits in the middle of the picture (NewsCardThumbnail);
+  // a small panel's topic icon would sit right under it, so the play mark
+  // stands in for it there.
+  const playMark = hasImage && article.format === "video" && Boolean(media?.videoId);
 
   return (
     <div
@@ -43,7 +47,7 @@ export function NewsStoryPicture({
         }}
       />
       {small ? (
-        <Icon aria-hidden="true" className="absolute inset-0 m-auto size-6 text-shamba-card/90" />
+        !playMark && <Icon aria-hidden="true" className="absolute inset-0 m-auto size-6 text-shamba-card/90" />
       ) : (
         <>
           <Icon aria-hidden="true" className="absolute -bottom-4 -right-3 size-32 text-shamba-card/15 sm:size-40" />

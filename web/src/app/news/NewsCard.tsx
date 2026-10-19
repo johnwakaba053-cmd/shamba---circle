@@ -7,8 +7,9 @@ import {
   newsPlaceLabel,
   type NewsCardData,
 } from "@/lib/news";
-import { NewsCardThumbnail } from "./NewsCardThumbnail";
+import { newsCardImageSrc } from "./NewsCardThumbnail";
 import { NewsFormatBadge } from "./NewsFormatBadge";
+import { NewsStoryPicture } from "./NewsStoryPicture";
 import type { NewsCardMedia } from "./newsData";
 
 // One story in a list -- every format, including video stories in Watch
@@ -32,6 +33,12 @@ export function NewsCard({
 }) {
   const Icon = NEWS_CATEGORY_ICON[article.category_id] ?? NEWS_CATEGORY_FALLBACK_ICON;
   const horizontal = layout === "horizontal";
+  // A story with a picture gets it over the region/topic panel, which shows
+  // while it loads or if it fails (NewsStoryPicture); a story without one
+  // stays a text card.
+  const picture = newsCardImageSrc(article, media) ? (
+    <NewsStoryPicture article={article} media={media} className="aspect-video w-full" />
+  ) : null;
 
   return (
     <article
@@ -41,11 +48,9 @@ export function NewsCard({
     >
       {horizontal ? (
         // Empty (and so hidden) when the story has no picture.
-        <div className="empty:hidden sm:w-1/3 sm:shrink-0">
-          <NewsCardThumbnail article={article} media={media} />
-        </div>
+        <div className="empty:hidden sm:w-1/3 sm:shrink-0">{picture}</div>
       ) : (
-        <NewsCardThumbnail article={article} media={media} />
+        picture
       )}
 
       {/* "contents" keeps the stacked card's layout exactly as before;

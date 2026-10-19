@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Play } from "lucide-react";
-import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from "@/lib/youtube";
+import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl, getYouTubeWatchUrl } from "@/lib/youtube";
 import { ThumbImage } from "@/app/my-farm/ThumbImage";
 
 // A video story's player. Until the reader taps, it's only YouTube's still
@@ -10,6 +10,13 @@ import { ThumbImage } from "@/app/my-farm/ThumbImage";
 // scripts) loads after the tap, which matters on prepaid mobile data.
 // The player is youtube-nocookie and is always built from a validated
 // ID (news_media.embed_id, checked again by the caller), never a URL.
+//
+// The play control is a real link to the video on YouTube (new tab, like
+// "Watch on YouTube"), so a tap still does something before this page's
+// scripts have loaded -- on slow data that can take several seconds, and
+// a script-only button would ignore the tap. Once they have, a plain tap
+// plays the video here instead; a modified or middle click keeps the
+// link's own behaviour.
 export function YouTubeFacade({
   videoId,
   title,
@@ -36,9 +43,21 @@ export function YouTubeFacade({
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => setPlaying(true)}
+    <a
+      href={getYouTubeWatchUrl(videoId)}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(event) => {
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        setPlaying(true);
+      }}
+      onKeyDown={(event) => {
+        // Space starts it too, as it did when this was a button.
+        if (event.key !== " ") return;
+        event.preventDefault();
+        setPlaying(true);
+      }}
       className="group relative block aspect-video w-full overflow-hidden rounded-shamba border border-shamba-line bg-shamba-ink"
     >
       {/* Hides itself if YouTube's still fails: the dark box and the play
@@ -58,6 +77,6 @@ export function YouTubeFacade({
         Play video: {title}
         {durationLabel ? ` (${durationLabel})` : ""}
       </span>
-    </button>
+    </a>
   );
 }
