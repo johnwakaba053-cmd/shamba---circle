@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { ArrowLeft, MapPin, Pencil } from "lucide-react";
+import { ArrowLeft, MapPin, Pencil, RotateCw } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import {
@@ -43,14 +43,14 @@ export default async function FarmDetail({
   // id (or a malformed one) is simply not found, never "forbidden", so
   // the page doesn't even confirm that the farm exists.
   const [
-    { data: farmData },
-    { data: plotsData },
-    { data: seasonsData },
-    { data: groupsData },
-    { data: cropTypesData },
-    { data: livestockTypesData },
-    { data: cropCategoriesData },
-    { data: livestockCategoriesData },
+    { data: farmData, error: farmError },
+    { data: plotsData, error: plotsError },
+    { data: seasonsData, error: seasonsError },
+    { data: groupsData, error: groupsError },
+    { data: cropTypesData, error: cropTypesError },
+    { data: livestockTypesData, error: livestockTypesError },
+    { data: cropCategoriesData, error: cropCategoriesError },
+    { data: livestockCategoriesData, error: livestockCategoriesError },
   ] = await Promise.all([
     supabase.from("farms").select(FARM_COLUMNS).eq("id", farmId).eq("profile_id", user.id).maybeSingle(),
     supabase
@@ -76,6 +76,41 @@ export default async function FarmDetail({
     supabase.from("crop_categories").select("id, name").order("sort_order", { ascending: true }),
     supabase.from("livestock_categories").select("id, name").order("sort_order", { ascending: true }),
   ]);
+
+  // A failed query is not "no such farm": say so, and offer a reload,
+  // rather than a 404 that tells the farmer the farm is gone.
+  if (farmError) {
+    return (
+      <div className="flex flex-1 flex-col bg-shamba-bg">
+        <AppHeader />
+        <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col items-center px-6 pb-20 pt-8 sm:px-10 sm:pt-16">
+          <div className="w-full max-w-sm">
+            <Link
+              href="/farm-records"
+              className="inline-flex items-center gap-2 font-sans text-sm font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink relative touch-target"
+            >
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              Back to Farm Records
+            </Link>
+            <div role="alert" className="mt-4 rounded-shamba border border-shamba-line bg-shamba-card p-4">
+              <p className="text-sm font-semibold text-shamba-rust">We couldn&apos;t load this farm.</p>
+              <p className="mt-1 text-sm leading-5 text-shamba-ink-soft">
+                Check your connection and try again. Your farm and its records are not affected.
+              </p>
+              {/* A plain link: a full reload works even before the page's scripts have loaded. */}
+              <a
+                href={`/farm-records/${encodeURIComponent(farmId)}`}
+                className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-sans text-sm font-semibold text-shamba-green hover:underline"
+              >
+                <RotateCw className="size-4" aria-hidden="true" />
+                Try again
+              </a>
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (!farmData) {
     notFound();
@@ -159,29 +194,64 @@ export default async function FarmDetail({
             <FarmArchiveControl farmId={farm.id} isArchived={isArchived} />
           </div>
 
-          <PlotsSection farmId={farm.id} plots={plots} farmArchived={isArchived} />
+          {/* A section whose data didn't load shows that instead of an empty
+              list -- and without its add form, so a failed load is never
+              mistaken for "nothing here yet" and re-entered. */}
+          {plotsError ? (
+            <SectionLoadError title="Plots" what="plots" farmId={farm.id} />
+          ) : (
+            <PlotsSection farmId={farm.id} plots={plots} farmArchived={isArchived} />
+          )}
 
-          <CropSeasonsSection
-            farmId={farm.id}
-            seasons={seasons}
-            plots={plots}
-            cropTypes={cropTypes}
-            cropCategories={cropCategories}
-            farmArchived={isArchived}
-            today={today}
-          />
+          {seasonsError || cropTypesError || cropCategoriesError ? (
+            <SectionLoadError title="Crops" what="crop seasons" farmId={farm.id} />
+          ) : (
+            <CropSeasonsSection
+              farmId={farm.id}
+              seasons={seasons}
+              plots={plots}
+              cropTypes={cropTypes}
+              cropCategories={cropCategories}
+              farmArchived={isArchived}
+              today={today}
+            />
+          )}
 
-          <LivestockSection
-            farmId={farm.id}
-            groups={groups}
-            plots={plots}
-            livestockTypes={livestockTypes}
-            livestockCategories={livestockCategories}
-            farmArchived={isArchived}
-            today={today}
-          />
+          {groupsError || livestockTypesError || livestockCategoriesError ? (
+            <SectionLoadError title="Livestock" what="livestock groups" farmId={farm.id} />
+          ) : (
+            <LivestockSection
+              farmId={farm.id}
+              groups={groups}
+              plots={plots}
+              livestockTypes={livestockTypes}
+              livestockCategories={livestockCategories}
+              farmArchived={isArchived}
+              today={today}
+            />
+          )}
         </div>
       </main>
     </div>
+  );
+}
+
+// Stands in for a section (same card and heading) when its data failed
+// to load.
+function SectionLoadError({ title, what, farmId }: { title: string; what: string; farmId: string }) {
+  return (
+    <section role="alert" className="mt-6 rounded-shamba border border-shamba-line bg-shamba-card p-4">
+      <h2 className="font-display text-base font-semibold text-shamba-ink">{title}</h2>
+      <p className="mt-1 text-sm leading-5 text-shamba-rust">
+        We couldn&apos;t load your {what}. Check your connection and try again.
+      </p>
+      <a
+        href={`/farm-records/${encodeURIComponent(farmId)}`}
+        className="mt-3 inline-flex min-h-11 items-center gap-1.5 font-sans text-sm font-semibold text-shamba-green hover:underline"
+      >
+        <RotateCw className="size-4" aria-hidden="true" />
+        Try again
+      </a>
+    </section>
   );
 }
