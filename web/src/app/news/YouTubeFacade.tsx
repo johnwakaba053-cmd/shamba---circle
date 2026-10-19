@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Play } from "lucide-react";
 import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl } from "@/lib/youtube";
+import { ThumbImage } from "@/app/my-farm/ThumbImage";
 
 // A video story's player. Until the reader taps, it's only YouTube's still
 // image and a play button -- the YouTube player (roughly a megabyte of
@@ -40,14 +41,9 @@ export function YouTubeFacade({
       onClick={() => setPlaying(true)}
       className="group relative block aspect-video w-full overflow-hidden rounded-shamba border border-shamba-line bg-shamba-ink"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={getYouTubeThumbnailUrl(videoId)}
-        alt=""
-        fetchPriority="high"
-        decoding="async"
-        className="absolute inset-0 size-full object-cover"
-      />
+      {/* Hides itself if YouTube's still fails: the dark box and the play
+          button stay, and the player still loads on tap. */}
+      <ThumbImage key={videoId} src={getYouTubeThumbnailUrl(videoId)} priority />
       <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center bg-black/20 transition-colors group-hover:bg-black/30">
         <span className="flex size-16 items-center justify-center rounded-full bg-shamba-green text-shamba-card">
           <Play className="size-7 translate-x-0.5 fill-shamba-card" />

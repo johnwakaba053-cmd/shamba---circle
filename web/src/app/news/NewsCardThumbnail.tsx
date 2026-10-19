@@ -1,6 +1,7 @@
 import { Images, Play } from "lucide-react";
 import type { NewsCardData } from "@/lib/news";
 import { formatVideoDuration, getYouTubeThumbnailUrl } from "@/lib/youtube";
+import { ThumbImage } from "@/app/my-farm/ThumbImage";
 import type { NewsCardMedia } from "./newsData";
 
 // The picture at the top of a story card, chosen by format:
@@ -14,14 +15,18 @@ import type { NewsCardMedia } from "./newsData";
 // while images load. size="small" (a sidebar thumbnail) keeps a smaller
 // play mark and leaves out the length and photo count. `children` are
 // extra overlays, e.g. the feed's region tag. Plain <img> like every
-// other Storage image in the app; decorative here (the card title says
-// what the story is), so alt is empty.
+// other Storage image in the app (ThumbImage: it hides itself if the file
+// fails, so whatever is behind it shows instead of a broken-image icon);
+// decorative here (the card title says what the story is), so alt is
+// empty. `background` is what shows while the picture loads or if it
+// fails -- transparent when NewsStoryPicture draws its panel underneath.
 export function NewsCardThumbnail({
   article,
   media,
   priority = false,
   className = "aspect-video w-full",
   size = "default",
+  background = "bg-shamba-bg",
   children,
 }: {
   article: NewsCardData;
@@ -29,6 +34,7 @@ export function NewsCardThumbnail({
   priority?: boolean;
   className?: string;
   size?: "default" | "small";
+  background?: string;
   children?: React.ReactNode;
 }) {
   const videoId = article.format === "video" ? (media?.videoId ?? null) : null;
@@ -40,16 +46,8 @@ export function NewsCardThumbnail({
   const photoCount = article.format === "photo_story" && !small ? (media?.photoCount ?? 0) : 0;
 
   return (
-    <div className={`relative overflow-hidden rounded-shamba bg-shamba-bg ${className}`}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={src}
-        alt=""
-        loading={priority ? "eager" : "lazy"}
-        fetchPriority={priority ? "high" : "auto"}
-        decoding="async"
-        className="absolute inset-0 size-full object-cover"
-      />
+    <div className={`relative overflow-hidden rounded-shamba ${background} ${className}`}>
+      <ThumbImage key={src} src={src} priority={priority} />
 
       {article.format === "video" && videoId && (
         <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center">

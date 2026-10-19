@@ -3,11 +3,13 @@ import { NewsCardThumbnail, newsCardImageSrc } from "./NewsCardThumbnail";
 import { NEWS_REGION_TONE } from "./NewsRegionMark";
 import type { NewsCardMedia } from "./newsData";
 
-// A story's picture on /news: its own image when it has one (cover,
-// YouTube still, first photo -- see NewsCardThumbnail), otherwise a
-// plain panel in the region's colours with the topic's icon. The panel
-// is clearly not a photo: nothing is made up or borrowed from the
-// publisher. `className` sizes either one (width included); `children` are overlays.
+// A story's picture on /news: a plain panel in the region's colours with
+// the topic's icon, and on top of it the story's own image when it has
+// one (cover, YouTube still, first photo -- see NewsCardThumbnail). The
+// panel is always drawn, so it is what shows while the image loads or if
+// it fails -- never an empty box (as on My Farm, FarmNewsThumb). It is
+// clearly not a photo: nothing is made up or borrowed from the publisher.
+// `className` sizes it (width included); `children` are overlays.
 export function NewsStoryPicture({
   article,
   media,
@@ -23,14 +25,7 @@ export function NewsStoryPicture({
   priority?: boolean;
   children?: React.ReactNode;
 }) {
-  if (newsCardImageSrc(article, media)) {
-    return (
-      <NewsCardThumbnail article={article} media={media} className={className} size={size} priority={priority}>
-        {children}
-      </NewsCardThumbnail>
-    );
-  }
-
+  const hasImage = Boolean(newsCardImageSrc(article, media));
   const Icon = NEWS_CATEGORY_ICON[article.category_id] ?? NEWS_CATEGORY_FALLBACK_ICON;
   const small = size === "small";
 
@@ -58,7 +53,22 @@ export function NewsStoryPicture({
           </span>
         </>
       )}
-      {children}
+      {hasImage ? (
+        <div className="absolute inset-0">
+          <NewsCardThumbnail
+            article={article}
+            media={media}
+            className="size-full"
+            size={size}
+            priority={priority}
+            background="bg-transparent"
+          >
+            {children}
+          </NewsCardThumbnail>
+        </div>
+      ) : (
+        children
+      )}
     </div>
   );
 }

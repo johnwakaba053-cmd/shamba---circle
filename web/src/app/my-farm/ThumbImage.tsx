@@ -10,8 +10,9 @@ import { useEffect, useRef } from "react";
 // a failure that happened before hydration, when onError wasn't attached
 // yet. Any photo credit for it ([data-thumb-credit] inside the same
 // [data-thumb-scope] row) is hidden with it. Decorative (alt=""): the
-// title beside it says what it is.
-export function ThumbImage({ src }: { src: string }) {
+// title beside it says what it is. `priority` loads it straight away (the
+// first picture on a page) instead of lazily.
+export function ThumbImage({ src, priority = false }: { src: string; priority?: boolean }) {
   const ref = useRef<HTMLImageElement>(null);
 
   useEffect(() => {
@@ -25,7 +26,8 @@ export function ThumbImage({ src }: { src: string }) {
       ref={ref}
       src={src}
       alt=""
-      loading="lazy"
+      loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : "auto"}
       decoding="async"
       onError={(event) => hide(event.currentTarget)}
       className="absolute inset-0 size-full object-cover"
