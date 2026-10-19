@@ -219,6 +219,28 @@ function isTransientError(err: unknown): boolean {
   return false;
 }
 
+const ERROR_DETAIL_MAX = 200;
+
+// fetch() reports every network-level failure as just "fetch failed";
+// the actual reason (e.g. UND_ERR_CONNECT_TIMEOUT, ENOTFOUND, a TLS code)
+// is in err.cause -- sometimes an AggregateError of one error per
+// address tried. Returned as one short line for error_message: codes and
+// messages only, never request headers (the request carries no
+// credentials either way).
+function describeFetchError(err: unknown): string {
+  if (!(err instanceof Error)) return "Unknown error";
+  const cause = (err as { cause?: unknown }).cause;
+  if (!(cause instanceof Error)) return err.message.slice(0, ERROR_DETAIL_MAX);
+
+  const describe = (e: Error) => {
+    const code = (e as { code?: unknown }).code;
+    return `${typeof code === "string" ? `${code}: ` : ""}${e.message}`;
+  };
+  const inner = cause instanceof AggregateError ? cause.errors.filter((e) => e instanceof Error) : [];
+  const detail = inner.length > 0 ? inner.slice(0, 3).map(describe).join("; ") : describe(cause);
+  return `${err.message} (${detail})`.slice(0, ERROR_DETAIL_MAX * 2);
+}
+
 // Downloads KAMIS's own "Export to Excel" output for the given,
 // already-validated parameters. Never scrapes the HTML market/
 // market_search pages themselves -- this is the one mechanism Stage
@@ -229,6 +251,7 @@ export async function fetchKamisExport(params: KamisFetchParams): Promise<KamisD
   let lastError: string = "Unknown error";
 
   for (let attempt = 0; attempt <= MAX_TRANSIENT_RETRIES; attempt++) {
+    const started = Date.now();
     try {
       const response = await fetch(url, {
         headers: { "User-Agent": "ShambaCircle-Ingestion/1.0" },
@@ -252,7 +275,7 @@ export async function fetchKamisExport(params: KamisFetchParams): Promise<KamisD
 
       return { ok: true, buffer, contentType, url };
     } catch (err) {
-      lastError = err instanceof Error ? err.message : "Unknown error";
+      lastError = `${describeFetchError(err)} after ${Date.now() - started}ms (attempt ${attempt + 1} of ${MAX_TRANSIENT_RETRIES + 1})`;
       if (!isTransientError(err) || attempt === MAX_TRANSIENT_RETRIES) {
         return { ok: false, error: `KAMIS request failed: ${lastError}`, url };
       }
