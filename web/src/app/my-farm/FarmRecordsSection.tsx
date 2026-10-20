@@ -105,7 +105,7 @@ export function FarmRecordsCard({ result }: { result: FarmSnapshotResult }) {
       icon={ClipboardList}
       tone="bg-shamba-green/10 text-shamba-green"
       title="My Farm Records"
-      subtitle="Your plots, crop seasons and animals"
+      subtitle="Your farms, crops and animals"
       href="/farm-records"
       linkLabel="Open"
     >

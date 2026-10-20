@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronRight, MapPin } from "lucide-react";
+import { ChevronRight, MapPin, RotateCw } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { FARM_COLUMNS, formatAcres, type Farm } from "@/lib/farmRecords";
@@ -19,7 +19,11 @@ export default async function FarmRecords() {
     redirect("/sign-in");
   }
 
-  const [{ data: farmsData, error }, { data: plotsData }, { data: countiesData }] = await Promise.all([
+  const [
+    { data: farmsData, error },
+    { data: plotsData, error: plotsError },
+    { data: countiesData },
+  ] = await Promise.all([
     supabase
       .from("farms")
       .select(FARM_COLUMNS)
@@ -80,6 +84,26 @@ export default async function FarmRecords() {
             </div>
           )}
 
+          {/* Without plots, a card's missing plot count would read as "no
+              plots", so say they didn't load instead. */}
+          {activeFarms.length > 0 && plotsError && (
+            <div role="alert" className="mt-6 rounded-shamba border border-shamba-line bg-shamba-card p-4">
+              <p className="text-sm leading-5 text-shamba-rust">
+                We couldn&apos;t load your plot counts. Your farms and plots are not affected.
+              </p>
+              {/* Navigating to this page again reloads it from the server
+                  (it is dynamic), and works as a plain link before scripts load. */}
+              <Link
+                href="/farm-records"
+                prefetch={false}
+                className="mt-2 inline-flex min-h-11 items-center gap-1.5 font-sans text-sm font-semibold text-shamba-green hover:underline"
+              >
+                <RotateCw className="size-4" aria-hidden="true" />
+                Try again
+              </Link>
+            </div>
+          )}
+
           {activeFarms.length > 0 && (
             <ul className="mt-6 flex flex-col gap-3">
               {activeFarms.map((farm) => (
@@ -87,7 +111,7 @@ export default async function FarmRecords() {
                   <FarmCard
                     farm={farm}
                     countyName={countyNames.get(farm.county_id)}
-                    plotCount={plotCounts.get(farm.id) ?? 0}
+                    plotCount={plotsError ? undefined : (plotCounts.get(farm.id) ?? 0)}
                   />
                 </li>
               ))}
@@ -121,6 +145,8 @@ function FarmCard({
 }: {
   farm: Farm;
   countyName: string | undefined;
+  // Undefined when plots weren't loaded (archived farms, or a failed plots
+  // query), so nothing is shown rather than a count that may be wrong.
   plotCount?: number;
 }) {
   const details = [
