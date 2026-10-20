@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { FarmForm } from "../FarmForm";
+import { LoadErrorCard } from "../LoadErrorCard";
 
 export default async function NewFarm() {
   const supabase = await createClient();
@@ -15,7 +16,9 @@ export default async function NewFarm() {
     redirect("/sign-in");
   }
 
-  const [{ data: countiesData }, { data: preferences }, { count: farmCount }] = await Promise.all([
+  // Only the counties are required: the Profile county and the farm count
+  // just pre-fill it; if they fail, no county is chosen and the name defaults to "My Farm".
+  const [{ data: countiesData, error: countiesError }, { data: preferences }, { count: farmCount }] = await Promise.all([
     supabase.from("counties").select("id, name").order("name", { ascending: true }),
     // Read-only: the Profile county is only a starting suggestion for the
     // form. farmer_preferences is never written from Farm Records.
@@ -37,25 +40,34 @@ export default async function NewFarm() {
             Back to Farm Records
           </Link>
 
-          <div className="mt-4 rounded-shamba border border-shamba-line bg-shamba-card p-6 sm:p-8">
-            <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-shamba-ink">
-              Add a farm
-            </h1>
-            <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
-              Only the name and county are needed. You can change anything later.
-            </p>
-
-            <FarmForm
-              counties={countiesData ?? []}
-              initialValues={{
-                name: (farmCount ?? 0) === 0 ? "My Farm" : "",
-                countyId: preferences?.county_id ?? "",
-                locationText: "",
-                sizeAcres: "",
-                tenure: "",
-              }}
+          {/* The county is required, so without the list the form couldn't be saved. */}
+          {countiesError ? (
+            <LoadErrorCard
+              title="We couldn't load the list of counties."
+              detail="A farm can't be added without it. Check your connection and try again."
+              retryHref="/farm-records/new"
             />
-          </div>
+          ) : (
+            <div className="mt-4 rounded-shamba border border-shamba-line bg-shamba-card p-6 sm:p-8">
+              <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-shamba-ink">
+                Add a farm
+              </h1>
+              <p className="mt-2 text-base leading-6 text-shamba-ink-soft">
+                Only the name and county are needed. You can change anything later.
+              </p>
+
+              <FarmForm
+                counties={countiesData ?? []}
+                initialValues={{
+                  name: (farmCount ?? 0) === 0 ? "My Farm" : "",
+                  countyId: preferences?.county_id ?? "",
+                  locationText: "",
+                  sizeAcres: "",
+                  tenure: "",
+                }}
+              />
+            </div>
+          )}
         </div>
       </main>
     </div>

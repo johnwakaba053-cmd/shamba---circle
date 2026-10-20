@@ -22,7 +22,7 @@ export default async function FarmRecords() {
   const [
     { data: farmsData, error },
     { data: plotsData, error: plotsError },
-    { data: countiesData },
+    { data: countiesData, error: countiesError },
   ] = await Promise.all([
     supabase
       .from("farms")
@@ -42,6 +42,10 @@ export default async function FarmRecords() {
   const archivedFarms = farms.filter((farm) => farm.archived_at !== null);
 
   const countyNames = new Map((countiesData ?? []).map((county) => [county.id, county.name]));
+  const missingDetails = [
+    activeFarms.length > 0 && plotsError ? "plot counts" : null,
+    farms.length > 0 && countiesError ? "county names" : null,
+  ].filter((detail): detail is string => detail !== null);
   const plotCounts = new Map<string, number>();
   for (const plot of plotsData ?? []) {
     plotCounts.set(plot.farm_id, (plotCounts.get(plot.farm_id) ?? 0) + 1);
@@ -84,12 +88,14 @@ export default async function FarmRecords() {
             </div>
           )}
 
-          {/* Without plots, a card's missing plot count would read as "no
-              plots", so say they didn't load instead. */}
-          {activeFarms.length > 0 && plotsError && (
+          {/* A card's missing plot count would read as "no plots", and a
+              missing county line looks like an unset county, so say which
+              details didn't load instead. Only active cards show plot
+              counts; every card shows its county. */}
+          {missingDetails.length > 0 && (
             <div role="alert" className="mt-6 rounded-shamba border border-shamba-line bg-shamba-card p-4">
               <p className="text-sm leading-5 text-shamba-rust">
-                We couldn&apos;t load your plot counts. Your farms and plots are not affected.
+                We couldn&apos;t load your {missingDetails.join(" or ")}. Your farms and plots are not affected.
               </p>
               {/* Navigating to this page again reloads it from the server
                   (it is dynamic), and works as a plain link before scripts load. */}
