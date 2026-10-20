@@ -24,7 +24,9 @@ import {
   INPUT_CLASS,
   LABEL_CLASS,
   Optional,
+  PLOTS_UNAVAILABLE_MESSAGE,
   PlotSelect,
+  PlotsUnavailableNote,
   RecordArchiveButton,
   TypeSelect,
   plotLabel,
@@ -38,10 +40,15 @@ import {
 // Authorization is livestock_groups' RLS (profile_id = auth.uid()) plus
 // the composite foreign keys to farms and farm_plots; the database also
 // refuses new groups on an archived farm or plot.
+//
+// `plotsUnavailable` means the plots query failed (not that the farm has
+// none): groups still list, but Add and Edit are replaced by a note and an
+// already-open form can't save.
 export function LivestockSection({
   farmId,
   groups,
   plots,
+  plotsUnavailable,
   livestockTypes,
   livestockCategories,
   farmArchived,
@@ -50,6 +57,7 @@ export function LivestockSection({
   farmId: string;
   groups: LivestockGroup[];
   plots: FarmPlot[];
+  plotsUnavailable: boolean;
   livestockTypes: TypeOption[];
   livestockCategories: CategoryOption[];
   farmArchived: boolean;
@@ -83,6 +91,7 @@ export function LivestockSection({
                   farmId={farmId}
                   group={group}
                   plots={plots}
+                  plotsUnavailable={plotsUnavailable}
                   livestockTypes={livestockTypes}
                   livestockCategories={livestockCategories}
                   onDone={() => setEditingId(null)}
@@ -93,18 +102,20 @@ export function LivestockSection({
                 <LivestockGroupSummary group={group} typeName={typeName(group.livestock_type_id)} plots={plots} today={today} />
                 {!farmArchived && (
                   <div className="-ml-2 mt-1 flex flex-wrap items-start gap-x-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAdding(false);
-                        setEditingId(group.id);
-                      }}
-                      aria-label={`Edit ${group.name}`}
-                      className="inline-flex min-h-11 items-center gap-1.5 px-2 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
-                    >
-                      <Pencil className="size-4" aria-hidden="true" />
-                      Edit
-                    </button>
+                    {!plotsUnavailable && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAdding(false);
+                          setEditingId(group.id);
+                        }}
+                        aria-label={`Edit ${group.name}`}
+                        className="inline-flex min-h-11 items-center gap-1.5 px-2 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+                      >
+                        <Pencil className="size-4" aria-hidden="true" />
+                        Edit
+                      </button>
+                    )}
                     <RecordArchiveButton
                       table="livestock_groups"
                       recordId={group.id}
@@ -125,11 +136,14 @@ export function LivestockSection({
             <LivestockGroupForm
               farmId={farmId}
               plots={plots}
+              plotsUnavailable={plotsUnavailable}
               livestockTypes={livestockTypes}
               livestockCategories={livestockCategories}
               onDone={() => setAdding(false)}
             />
           </div>
+        ) : plotsUnavailable ? (
+          <PlotsUnavailableNote what="livestock" />
         ) : (
           <button
             type="button"
@@ -209,6 +223,7 @@ function LivestockGroupForm({
   farmId,
   group,
   plots,
+  plotsUnavailable,
   livestockTypes,
   livestockCategories,
   onDone,
@@ -216,6 +231,7 @@ function LivestockGroupForm({
   farmId: string;
   group?: LivestockGroup;
   plots: FarmPlot[];
+  plotsUnavailable: boolean;
   livestockTypes: TypeOption[];
   livestockCategories: CategoryOption[];
   onDone: () => void;
@@ -245,6 +261,10 @@ function LivestockGroupForm({
     event.preventDefault();
     if (isLoading) return;
 
+    if (plotsUnavailable) {
+      setStatus({ kind: "error", message: PLOTS_UNAVAILABLE_MESSAGE });
+      return;
+    }
     if (!typeId) {
       setStatus({ kind: "error", message: "Choose the type of livestock." });
       return;
@@ -372,10 +392,27 @@ function LivestockGroupForm({
         />
       </div>
 
-      <PlotSelect id={`${idPrefix}-plot`} value={plotId} onChange={setPlotId} plots={plots} disabled={isLoading} />
+      <PlotSelect
+        id={`${idPrefix}-plot`}
+        value={plotId}
+        onChange={setPlotId}
+        plots={plots}
+        disabled={isLoading || plotsUnavailable}
+      />
 
-      <FormError status={status} />
-      <FormButtons isLoading={isLoading} submitLabel={group ? "Save livestock" : "Add livestock"} onCancel={onDone} />
+      {plotsUnavailable ? (
+        <p role="alert" className="text-sm font-semibold text-shamba-rust">
+          {PLOTS_UNAVAILABLE_MESSAGE}
+        </p>
+      ) : (
+        <FormError status={status} />
+      )}
+      <FormButtons
+        isLoading={isLoading}
+        submitLabel={group ? "Save livestock" : "Add livestock"}
+        onCancel={onDone}
+        submitDisabled={plotsUnavailable}
+      />
     </form>
   );
 }

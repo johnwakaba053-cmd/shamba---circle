@@ -196,7 +196,10 @@ export default async function FarmDetail({
 
           {/* A section whose data didn't load shows that instead of an empty
               list -- and without its add form, so a failed load is never
-              mistaken for "nothing here yet" and re-entered. */}
+              mistaken for "nothing here yet" and re-entered. Crops and
+              Livestock still list their records when only plots failed, but
+              can't be added or edited, since their plot choice depends on
+              the plots. */}
           {plotsError ? (
             <SectionLoadError title="Plots" what="plots" farmId={farm.id} />
           ) : (
@@ -210,6 +213,7 @@ export default async function FarmDetail({
               farmId={farm.id}
               seasons={seasons}
               plots={plots}
+              plotsUnavailable={Boolean(plotsError)}
               cropTypes={cropTypes}
               cropCategories={cropCategories}
               farmArchived={isArchived}
@@ -224,6 +228,7 @@ export default async function FarmDetail({
               farmId={farm.id}
               groups={groups}
               plots={plots}
+              plotsUnavailable={Boolean(plotsError)}
               livestockTypes={livestockTypes}
               livestockCategories={livestockCategories}
               farmArchived={isArchived}

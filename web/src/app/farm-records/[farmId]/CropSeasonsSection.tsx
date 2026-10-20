@@ -26,7 +26,9 @@ import {
   INPUT_CLASS,
   LABEL_CLASS,
   Optional,
+  PLOTS_UNAVAILABLE_MESSAGE,
   PlotSelect,
+  PlotsUnavailableNote,
   RecordArchiveButton,
   TypeSelect,
   plotLabel,
@@ -44,11 +46,14 @@ import {
 // refuses new seasons on an archived farm or plot.
 //
 // `today` comes from the server render so the server and the browser
-// group seasons the same way.
+// group seasons the same way. `plotsUnavailable` means the plots query
+// failed (not that the farm has none): seasons still list, but Add and
+// Edit are replaced by a note and an already-open form can't save.
 export function CropSeasonsSection({
   farmId,
   seasons,
   plots,
+  plotsUnavailable,
   cropTypes,
   cropCategories,
   farmArchived,
@@ -57,6 +62,7 @@ export function CropSeasonsSection({
   farmId: string;
   seasons: CropSeason[];
   plots: FarmPlot[];
+  plotsUnavailable: boolean;
   cropTypes: TypeOption[];
   cropCategories: CategoryOption[];
   farmArchived: boolean;
@@ -82,6 +88,7 @@ export function CropSeasonsSection({
           farmId={farmId}
           season={season}
           plots={plots}
+          plotsUnavailable={plotsUnavailable}
           cropTypes={cropTypes}
           cropCategories={cropCategories}
           onDone={() => setEditingId(null)}
@@ -92,18 +99,20 @@ export function CropSeasonsSection({
         <CropSeasonSummary season={season} cropName={cropName(season.crop_type_id)} plots={plots} today={today} />
         {!farmArchived && (
           <div className="-ml-2 mt-1 flex flex-wrap items-start gap-x-1">
-            <button
-              type="button"
-              onClick={() => {
-                setAdding(false);
-                setEditingId(season.id);
-              }}
-              aria-label={`Edit ${cropName(season.crop_type_id)}`}
-              className="inline-flex min-h-11 items-center gap-1.5 px-2 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
-            >
-              <Pencil className="size-4" aria-hidden="true" />
-              Edit
-            </button>
+            {!plotsUnavailable && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAdding(false);
+                  setEditingId(season.id);
+                }}
+                aria-label={`Edit ${cropName(season.crop_type_id)}`}
+                className="inline-flex min-h-11 items-center gap-1.5 px-2 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+              >
+                <Pencil className="size-4" aria-hidden="true" />
+                Edit
+              </button>
+            )}
             {cropSeasonState(season, today) === "growing" && (
               <EndSeasonButton season={season} cropName={cropName(season.crop_type_id)} />
             )}
@@ -153,11 +162,14 @@ export function CropSeasonsSection({
             <CropSeasonForm
               farmId={farmId}
               plots={plots}
+              plotsUnavailable={plotsUnavailable}
               cropTypes={cropTypes}
               cropCategories={cropCategories}
               onDone={() => setAdding(false)}
             />
           </div>
+        ) : plotsUnavailable ? (
+          <PlotsUnavailableNote what="crops" />
         ) : (
           <button
             type="button"
@@ -250,6 +262,7 @@ function CropSeasonForm({
   farmId,
   season,
   plots,
+  plotsUnavailable,
   cropTypes,
   cropCategories,
   onDone,
@@ -257,6 +270,7 @@ function CropSeasonForm({
   farmId: string;
   season?: CropSeason;
   plots: FarmPlot[];
+  plotsUnavailable: boolean;
   cropTypes: TypeOption[];
   cropCategories: CategoryOption[];
   onDone: () => void;
@@ -277,6 +291,10 @@ function CropSeasonForm({
     event.preventDefault();
     if (isLoading) return;
 
+    if (plotsUnavailable) {
+      setStatus({ kind: "error", message: PLOTS_UNAVAILABLE_MESSAGE });
+      return;
+    }
     if (!cropTypeId) {
       setStatus({ kind: "error", message: "Choose the crop." });
       return;
@@ -423,10 +441,27 @@ function CropSeasonForm({
         />
       </div>
 
-      <PlotSelect id={`${idPrefix}-plot`} value={plotId} onChange={setPlotId} plots={plots} disabled={isLoading} />
+      <PlotSelect
+        id={`${idPrefix}-plot`}
+        value={plotId}
+        onChange={setPlotId}
+        plots={plots}
+        disabled={isLoading || plotsUnavailable}
+      />
 
-      <FormError status={status} />
-      <FormButtons isLoading={isLoading} submitLabel={season ? "Save crop" : "Add crop"} onCancel={onDone} />
+      {plotsUnavailable ? (
+        <p role="alert" className="text-sm font-semibold text-shamba-rust">
+          {PLOTS_UNAVAILABLE_MESSAGE}
+        </p>
+      ) : (
+        <FormError status={status} />
+      )}
+      <FormButtons
+        isLoading={isLoading}
+        submitLabel={season ? "Save crop" : "Add crop"}
+        onCancel={onDone}
+        submitDisabled={plotsUnavailable}
+      />
     </form>
   );
 }

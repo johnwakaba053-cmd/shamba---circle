@@ -32,7 +32,9 @@ export function Optional() {
 
 // "Whole farm" (no plot) first, then the farm's active plots. A record
 // already on a plot that has since been archived keeps it as an option so
-// editing other fields doesn't silently move the record off its plot.
+// editing other fields doesn't silently move the record off its plot. For
+// the same reason a plot that isn't in the list at all still gets an
+// option, rather than the select falling back to "Whole farm".
 export function PlotSelect({
   id,
   value,
@@ -47,6 +49,7 @@ export function PlotSelect({
   disabled: boolean;
 }) {
   const options = plots.filter((plot) => plot.archived_at === null || plot.id === value);
+  const valueMissing = value !== "" && !options.some((plot) => plot.id === value);
 
   return (
     <div className="flex flex-col gap-2">
@@ -55,6 +58,7 @@ export function PlotSelect({
       </label>
       <select id={id} value={value} onChange={(event) => onChange(event.target.value)} disabled={disabled} className={INPUT_CLASS}>
         <option value="">Whole farm</option>
+        {valueMissing && <option value={value}>Current plot</option>}
         {options.map((plot) => (
           <option key={plot.id} value={plot.id}>
             {plot.archived_at === null ? plot.name : `${plot.name} (archived plot)`}
@@ -126,10 +130,12 @@ export function FormButtons({
   isLoading,
   submitLabel,
   onCancel,
+  submitDisabled = false,
 }: {
   isLoading: boolean;
   submitLabel: string;
   onCancel: () => void;
+  submitDisabled?: boolean;
 }) {
   return (
     <div className="flex items-center gap-3">
@@ -143,13 +149,27 @@ export function FormButtons({
       </button>
       <button
         type="submit"
-        disabled={isLoading}
+        disabled={isLoading || submitDisabled}
         className="inline-flex flex-1 items-center justify-center gap-2 rounded-shamba bg-shamba-green px-5 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep disabled:cursor-not-allowed disabled:opacity-70"
       >
         {isLoading && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
         {isLoading ? "Saving…" : submitLabel}
       </button>
     </div>
+  );
+}
+
+// Shown in place of Add and Edit (and in a form left open across a
+// refresh) while the farm's plots failed to load: a record's plot choice
+// can't be trusted then, so nothing is saved until the plots come back.
+export const PLOTS_UNAVAILABLE_MESSAGE =
+  "Your plots didn't load, so this can't be saved right now. Use Try again under Plots.";
+
+export function PlotsUnavailableNote({ what }: { what: string }) {
+  return (
+    <p className="mt-3 text-sm leading-5 text-shamba-ink-soft">
+      Your plots didn&apos;t load, so {what} can&apos;t be added or changed right now. Use Try again under Plots.
+    </p>
   );
 }
 
