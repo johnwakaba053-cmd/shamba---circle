@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { farmRecordErrorMessage } from "@/lib/farmRecords";
 
 type Status =
   | { kind: "idle" }
@@ -49,7 +50,13 @@ export function FarmArchiveControl({ farmId, isArchived }: { farmId: string; isA
         .eq("profile_id", user.id);
 
       if (error) {
-        setStatus({ kind: "error", message: "We couldn't update this farm. Please try again." });
+        // Archiving can wait on a plot, crop or livestock write that is
+        // still running, and is cut off by the API's statement timeout
+        // (57014) if that takes too long.
+        setStatus({
+          kind: "error",
+          message: farmRecordErrorMessage(error, "We couldn't update this farm. Please try again."),
+        });
         return;
       }
 

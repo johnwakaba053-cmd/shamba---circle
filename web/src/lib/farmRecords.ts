@@ -205,11 +205,20 @@ export function headCountNoun(livestockTypeId: string, count: number): string {
   return one ? "animal" : "animals";
 }
 
-// Turns a Supabase error from a crop season / livestock group write into a
-// sentence a farmer can act on. 'farm_archived' / 'plot_archived' come
-// from check_farm_record_parents_active (SQLSTATE P0001); 23503 is a
-// farm, plot or type that doesn't exist (or isn't the caller's).
+// Turns a Supabase error from a plot, crop season or livestock group write
+// into a sentence a farmer can act on. 'farm_archived' / 'plot_archived'
+// come from the archived-parent checks (SQLSTATE P0001); 23503 is a
+// farm, plot or type that doesn't exist (or isn't the caller's); 55P03 is
+// those checks giving up after waiting on a farm or plot that another
+// request is changing at the same moment; 57014 is the API's statement
+// timeout (8s for signed-in users), after which the change is rolled back.
 export function farmRecordErrorMessage(error: { code?: string; message?: string }, fallback: string): string {
+  if (error.code === "55P03") {
+    return "Your farm records are being updated right now. Please try again in a moment.";
+  }
+  if (error.code === "57014") {
+    return "This took too long, so nothing was changed. Please try again in a moment.";
+  }
   if (error.code === "P0001" && error.message === "farm_archived") {
     return "This farm is archived. Restore the farm first.";
   }

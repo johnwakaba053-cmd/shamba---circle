@@ -4,7 +4,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Archive, ArchiveRestore, Loader2, Pencil, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { MAX_PLOT_NAME_LENGTH, formatAcres, parseAcres, type FarmPlot } from "@/lib/farmRecords";
+import {
+  MAX_PLOT_NAME_LENGTH,
+  farmRecordErrorMessage,
+  formatAcres,
+  parseAcres,
+  type FarmPlot,
+} from "@/lib/farmRecords";
 
 type Status =
   | { kind: "idle" }
@@ -193,7 +199,7 @@ function PlotForm({
           message:
             error.code === UNIQUE_VIOLATION
               ? `You already have a plot called "${trimmedName}" on this farm. Choose a different name.`
-              : "We couldn't save this plot. Please try again.",
+              : farmRecordErrorMessage(error, "We couldn't save this plot. Please try again."),
         });
         return;
       }
@@ -311,7 +317,7 @@ function PlotArchiveButton({ plot }: { plot: FarmPlot }) {
           message:
             error.code === UNIQUE_VIOLATION
               ? `Another plot is already called "${plot.name}". Rename or archive it first.`
-              : "Couldn't update. Try again.",
+              : farmRecordErrorMessage(error, "Couldn't update. Try again."),
         });
         return;
       }
