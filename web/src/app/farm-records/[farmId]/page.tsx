@@ -129,7 +129,11 @@ export default async function FarmDetail({
   // states are worked out the same way on the server and in the browser.
   const today = todayInKenya();
 
-  const { data: county } = await supabase.from("counties").select("name").eq("id", farm.county_id).maybeSingle();
+  const { data: county, error: countyError } = await supabase
+    .from("counties")
+    .select("name")
+    .eq("id", farm.county_id)
+    .maybeSingle();
 
   const details = [
     { key: "size", label: "Size", value: farm.size_acres !== null ? formatAcres(farm.size_acres) : null },
@@ -166,6 +170,22 @@ export default async function FarmDetail({
               {[farm.location_text, county?.name].filter(Boolean).join(", ")}
             </span>
           </p>
+
+          {/* Every farm has a county, so a missing name means it didn't
+              load -- say so rather than leave it out. */}
+          {countyError && (
+            <p role="alert" className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-shamba-rust">
+              <span>The county didn&apos;t load.</span>
+              {/* A plain link: a full reload works even before the page's scripts have loaded. */}
+              <a
+                href={`/farm-records/${encodeURIComponent(farm.id)}`}
+                className="inline-flex min-h-11 items-center gap-1.5 font-sans font-semibold text-shamba-green hover:underline"
+              >
+                <RotateCw className="size-4" aria-hidden="true" />
+                Try again
+              </a>
+            </p>
+          )}
 
           {details.length > 0 && (
             <div className="mt-4 rounded-shamba border border-shamba-line bg-shamba-card p-4">
