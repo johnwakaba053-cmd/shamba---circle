@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ChevronRight, MapPin, RotateCw } from "lucide-react";
+import { ChevronRight, LayoutDashboard, MapPin, RotateCw } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { FARM_COLUMNS, formatAcres, type Farm } from "@/lib/farmRecords";
@@ -65,12 +65,23 @@ export default async function FarmRecords() {
             your farm records.
           </p>
 
-          <Link
-            href="/farm-records/new"
-            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep"
-          >
-            Add a farm
-          </Link>
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Link
+              href="/farm-records/new"
+              className="inline-flex min-h-11 items-center justify-center rounded-shamba bg-shamba-green px-6 py-3 font-sans text-base font-semibold text-shamba-card transition-colors hover:bg-shamba-green-deep"
+            >
+              Add a farm
+            </Link>
+            {activeFarms.length > 0 && (
+              <Link
+                href="/farm-records/dashboard"
+                className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-shamba border border-shamba-line bg-shamba-card px-5 py-3 font-sans text-base font-semibold text-shamba-ink transition-colors hover:border-shamba-green"
+              >
+                <LayoutDashboard className="size-4" aria-hidden="true" />
+                Farm dashboard
+              </Link>
+            )}
+          </div>
 
           {error && (
             <p role="alert" className="mt-6 text-sm font-semibold text-shamba-rust">

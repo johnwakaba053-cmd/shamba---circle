@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarCheck, Loader2, Pencil, Plus } from "lucide-react";
+import { CalendarCheck, ClipboardList, Loader2, Pencil, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   MAX_CROP_LABEL_LENGTH,
@@ -39,7 +40,12 @@ import {
 // on one plot or the whole farm (plots are optional). Its state --
 // Planned, Growing, Ended or Archived -- is derived from its dates and
 // today's date in Kenya (cropSeasonState), never stored. Create, edit,
-// end and archive all happen in place, like plots.
+// end and archive all happen in place, like plots. Each season opens its
+// own page (crops/[seasonId]) for the work done on it -- but only once
+// the farm activity log is in the database (`activitiesEnabled`), so no
+// link leads to a page that can't record anything yet. `activityCounts`
+// is the number of current activities per season, or null if they
+// didn't load (the links still show, without a number).
 //
 // Authorization is crop_seasons' RLS (profile_id = auth.uid()) plus the
 // composite foreign keys to farms and farm_plots; the database also
@@ -58,6 +64,8 @@ export function CropSeasonsSection({
   cropCategories,
   farmArchived,
   today,
+  activitiesEnabled,
+  activityCounts,
 }: {
   farmId: string;
   seasons: CropSeason[];
@@ -67,6 +75,8 @@ export function CropSeasonsSection({
   cropCategories: CategoryOption[];
   farmArchived: boolean;
   today: string;
+  activitiesEnabled: boolean;
+  activityCounts: Record<string, number> | null;
 }) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -80,6 +90,8 @@ export function CropSeasonsSection({
   const archived = inState("archived");
 
   const cropName = (id: string) => cropTypes.find((type) => type.id === id)?.name ?? id;
+  const seasonHref = (season: CropSeason) =>
+    activitiesEnabled ? `/farm-records/${farmId}/crops/${season.id}` : null;
 
   const renderRow = (season: CropSeason) =>
     editingId === season.id ? (
@@ -96,34 +108,52 @@ export function CropSeasonsSection({
       </li>
     ) : (
       <li key={season.id} className="py-2">
-        <CropSeasonSummary season={season} cropName={cropName(season.crop_type_id)} plots={plots} today={today} />
-        {!farmArchived && (
-          <div className="-ml-2 mt-1 flex flex-wrap items-start gap-x-1">
-            {!plotsUnavailable && (
-              <button
-                type="button"
-                onClick={() => {
-                  setAdding(false);
-                  setEditingId(season.id);
-                }}
-                aria-label={`Edit ${cropName(season.crop_type_id)}`}
-                className="inline-flex min-h-11 items-center gap-1.5 px-2 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
-              >
-                <Pencil className="size-4" aria-hidden="true" />
-                Edit
-              </button>
-            )}
-            {cropSeasonState(season, today) === "growing" && (
-              <EndSeasonButton season={season} cropName={cropName(season.crop_type_id)} />
-            )}
-            <RecordArchiveButton
-              table="crop_seasons"
-              recordId={season.id}
-              recordName={seasonName(cropName(season.crop_type_id), season)}
-              isArchived={false}
-            />
-          </div>
-        )}
+        <CropSeasonSummary
+          season={season}
+          cropName={cropName(season.crop_type_id)}
+          plots={plots}
+          today={today}
+          href={seasonHref(season)}
+        />
+        <div className="-ml-2 mt-1 flex flex-wrap items-start gap-x-1">
+          {activitiesEnabled && (
+            <Link
+              href={`/farm-records/${farmId}/crops/${season.id}`}
+              className="inline-flex min-h-11 items-center gap-1.5 px-2 font-sans text-xs font-semibold text-shamba-green transition-colors hover:text-shamba-green-deep"
+            >
+              <ClipboardList className="size-4" aria-hidden="true" />
+              Activities
+              {activityCounts && <span className="font-normal">({activityCounts[season.id] ?? 0})</span>}
+            </Link>
+          )}
+          {!farmArchived && (
+            <>
+              {!plotsUnavailable && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdding(false);
+                    setEditingId(season.id);
+                  }}
+                  aria-label={`Edit ${cropName(season.crop_type_id)}`}
+                  className="inline-flex min-h-11 items-center gap-1.5 px-2 font-sans text-xs font-semibold text-shamba-ink-soft transition-colors hover:text-shamba-ink"
+                >
+                  <Pencil className="size-4" aria-hidden="true" />
+                  Edit
+                </button>
+              )}
+              {cropSeasonState(season, today) === "growing" && (
+                <EndSeasonButton season={season} cropName={cropName(season.crop_type_id)} />
+              )}
+              <RecordArchiveButton
+                table="crop_seasons"
+                recordId={season.id}
+                recordName={seasonName(cropName(season.crop_type_id), season)}
+                isArchived={false}
+              />
+            </>
+          )}
+        </div>
       </li>
     );
 
@@ -206,6 +236,7 @@ export function CropSeasonsSection({
                   cropName={cropName(season.crop_type_id)}
                   plots={plots}
                   today={today}
+                  href={seasonHref(season)}
                   muted
                 />
                 {!farmArchived && (
@@ -235,12 +266,14 @@ function CropSeasonSummary({
   cropName,
   plots,
   today,
+  href,
   muted = false,
 }: {
   season: CropSeason;
   cropName: string;
   plots: FarmPlot[];
   today: string;
+  href: string | null;
   muted?: boolean;
 }) {
   const details = [cropSeasonDates(season, today), plotLabel(season.plot_id, plots), season.area_acres !== null ? formatAcres(season.area_acres) : null]
@@ -250,8 +283,17 @@ function CropSeasonSummary({
   return (
     <div className="min-w-0">
       <p className={`break-words font-sans text-base ${muted ? "text-shamba-ink-soft" : "font-semibold text-shamba-ink"}`}>
-        {cropName}
-        {season.label && <span className="font-normal text-shamba-ink-soft"> · {season.label}</span>}
+        {href ? (
+          <Link href={href} className="hover:text-shamba-green-deep hover:underline">
+            {cropName}
+            {season.label && <span className="font-normal text-shamba-ink-soft"> · {season.label}</span>}
+          </Link>
+        ) : (
+          <>
+            {cropName}
+            {season.label && <span className="font-normal text-shamba-ink-soft"> · {season.label}</span>}
+          </>
+        )}
       </p>
       <p className="break-words font-mono text-xs leading-5 text-shamba-ink-soft">{details}</p>
     </div>

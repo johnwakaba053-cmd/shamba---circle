@@ -18,6 +18,7 @@ import {
   type LivestockGroup,
   type TypeOption,
 } from "@/lib/farmRecords";
+import { isMissingTableError } from "@/lib/farmActivities";
 import { CropSeasonsSection } from "./CropSeasonsSection";
 import { FarmArchiveControl } from "./FarmArchiveControl";
 import { LivestockSection } from "./LivestockSection";
@@ -51,6 +52,7 @@ export default async function FarmDetail({
     { data: livestockTypesData, error: livestockTypesError },
     { data: cropCategoriesData, error: cropCategoriesError },
     { data: livestockCategoriesData, error: livestockCategoriesError },
+    { data: activityRowsData, error: activityRowsError },
   ] = await Promise.all([
     supabase.from("farms").select(FARM_COLUMNS).eq("id", farmId).eq("profile_id", user.id).maybeSingle(),
     supabase
@@ -75,6 +77,14 @@ export default async function FarmDetail({
     supabase.from("livestock_types").select("id, name, category_id").order("name", { ascending: true }),
     supabase.from("crop_categories").select("id, name").order("sort_order", { ascending: true }),
     supabase.from("livestock_categories").select("id, name").order("sort_order", { ascending: true }),
+    // Current crop activities, only to count them per season.
+    supabase
+      .from("farm_records")
+      .select("crop_season_id")
+      .eq("farm_id", farmId)
+      .eq("profile_id", user.id)
+      .not("crop_season_id", "is", null)
+      .is("voided_at", null),
   ]);
 
   // A failed query is not "no such farm": say so, and offer a reload,
@@ -128,6 +138,18 @@ export default async function FarmDetail({
   // One "today" (Kenya time) for the whole render, so crop and livestock
   // states are worked out the same way on the server and in the browser.
   const today = todayInKenya();
+
+  // Crop activities need the farm activity log (FR-1a). Until that table
+  // is in the database, the seasons don't link to their activity pages.
+  // Any other failure only loses the counts.
+  const activitiesEnabled = !isMissingTableError(activityRowsError);
+  let activityCounts: Record<string, number> | null = null;
+  if (!activityRowsError) {
+    activityCounts = {};
+    for (const row of (activityRowsData ?? []) as { crop_season_id: string }[]) {
+      activityCounts[row.crop_season_id] = (activityCounts[row.crop_season_id] ?? 0) + 1;
+    }
+  }
 
   const { data: county, error: countyError } = await supabase
     .from("counties")
@@ -220,41 +242,49 @@ export default async function FarmDetail({
               Livestock still list their records when only plots failed, but
               can't be added or edited, since their plot choice depends on
               the plots. */}
-          {plotsError ? (
-            <SectionLoadError title="Plots" what="plots" farmId={farm.id} />
-          ) : (
-            <PlotsSection farmId={farm.id} plots={plots} farmArchived={isArchived} />
-          )}
+          <div id="plots" className="scroll-mt-4">
+            {plotsError ? (
+              <SectionLoadError title="Plots" what="plots" farmId={farm.id} />
+            ) : (
+              <PlotsSection farmId={farm.id} plots={plots} farmArchived={isArchived} />
+            )}
+          </div>
 
-          {seasonsError || cropTypesError || cropCategoriesError ? (
-            <SectionLoadError title="Crops" what="crop seasons" farmId={farm.id} />
-          ) : (
-            <CropSeasonsSection
-              farmId={farm.id}
-              seasons={seasons}
-              plots={plots}
-              plotsUnavailable={Boolean(plotsError)}
-              cropTypes={cropTypes}
-              cropCategories={cropCategories}
-              farmArchived={isArchived}
-              today={today}
-            />
-          )}
+          <div id="crops" className="scroll-mt-4">
+            {seasonsError || cropTypesError || cropCategoriesError ? (
+              <SectionLoadError title="Crops" what="crop seasons" farmId={farm.id} />
+            ) : (
+              <CropSeasonsSection
+                farmId={farm.id}
+                seasons={seasons}
+                plots={plots}
+                plotsUnavailable={Boolean(plotsError)}
+                cropTypes={cropTypes}
+                cropCategories={cropCategories}
+                farmArchived={isArchived}
+                today={today}
+                activitiesEnabled={activitiesEnabled}
+                activityCounts={activityCounts}
+              />
+            )}
+          </div>
 
-          {groupsError || livestockTypesError || livestockCategoriesError ? (
-            <SectionLoadError title="Livestock" what="livestock groups" farmId={farm.id} />
-          ) : (
-            <LivestockSection
-              farmId={farm.id}
-              groups={groups}
-              plots={plots}
-              plotsUnavailable={Boolean(plotsError)}
-              livestockTypes={livestockTypes}
-              livestockCategories={livestockCategories}
-              farmArchived={isArchived}
-              today={today}
-            />
-          )}
+          <div id="livestock" className="scroll-mt-4">
+            {groupsError || livestockTypesError || livestockCategoriesError ? (
+              <SectionLoadError title="Livestock" what="livestock groups" farmId={farm.id} />
+            ) : (
+              <LivestockSection
+                farmId={farm.id}
+                groups={groups}
+                plots={plots}
+                plotsUnavailable={Boolean(plotsError)}
+                livestockTypes={livestockTypes}
+                livestockCategories={livestockCategories}
+                farmArchived={isArchived}
+                today={today}
+              />
+            )}
+          </div>
         </div>
       </main>
     </div>
