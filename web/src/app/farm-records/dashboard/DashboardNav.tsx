@@ -140,6 +140,7 @@ export function FarmSummaryList({
     { label: "Crop seasons", icon: Sprout, href: farmId ? `${farm}#crops` : farm, count: seasons },
     { label: "Livestock groups", icon: PawPrint, href: farmId ? `${farm}#livestock` : farm, count: groups },
     { label: "Recent activity", icon: History, href: "#recent-activity", count: null },
+    { label: "Reports", icon: BarChart3, href: farmId ? `/farm-records/reports?farm=${encodeURIComponent(farmId)}` : "/farm-records/reports", count: null },
   ];
   return (
     <section aria-labelledby="farm-summary-heading" className="rounded-2xl border border-shamba-line bg-shamba-card p-2 lg:hidden">
