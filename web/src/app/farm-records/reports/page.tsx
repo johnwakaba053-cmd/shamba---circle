@@ -8,10 +8,13 @@ import {
   FARM_COLUMNS,
   LIVESTOCK_GROUP_COLUMNS,
   PLOT_COLUMNS,
+  cropSeasonState,
   formatAcres,
   formatRecordDate,
+  todayInKenya,
   tenureLabel,
   type CropSeason,
+  type CropSeasonState,
   type Farm,
   type FarmPlot,
   type LivestockGroup,
@@ -32,6 +35,13 @@ const REPORT_SECTIONS: { value: SectionKey; label: string }[] = [
   { value: "livestock", label: "Livestock groups" },
 ];
 
+const CROP_SEASON_STATE_LABELS: Record<CropSeasonState, string> = {
+  planned: "Planned",
+  growing: "Growing",
+  ended: "Ended",
+  archived: "Archived",
+};
+
 const PAGE_SIZE = 500;
 const MAX_REPORT_ROWS = 20_000;
 
@@ -39,10 +49,13 @@ async function readAllRows<T>(
   page: (from: number, to: number) => PromiseLike<PageResult<T>>,
 ): Promise<{ rows: T[]; failed: boolean; capped: boolean }> {
   const rows: T[] = [];
-  for (let from = 0; from < MAX_REPORT_ROWS; from += PAGE_SIZE) {
+  for (let from = 0; from <= MAX_REPORT_ROWS; from += PAGE_SIZE) {
     const result = await page(from, from + PAGE_SIZE - 1);
     if (result.error) return { rows, failed: true, capped: false };
     const batch = result.data ?? [];
+    if (from === MAX_REPORT_ROWS) {
+      return { rows, failed: false, capped: batch.length > 0 };
+    }
     rows.push(...batch);
     if (batch.length < PAGE_SIZE) return { rows, failed: false, capped: false };
   }
@@ -112,8 +125,8 @@ export default async function FarmRecordsReportPage({ searchParams }: { searchPa
   if (selectedFarm) {
     const [plotResult, seasonResult, groupResult, cropTypeResult, livestockTypeResult, countyResult] = await Promise.all([
       readAllRows<FarmPlot>((from, to) => supabase.from("farm_plots").select(PLOT_COLUMNS).eq("profile_id", user.id).eq("farm_id", selectedFarm.id).order("id").range(from, to)),
-      readAllRows<CropSeason>((from, to) => supabase.from("crop_seasons").select(CROP_SEASON_COLUMNS).eq("profile_id", user.id).eq("farm_id", selectedFarm.id).order("started_on").range(from, to)),
-      readAllRows<LivestockGroup>((from, to) => supabase.from("livestock_groups").select(LIVESTOCK_GROUP_COLUMNS).eq("profile_id", user.id).eq("farm_id", selectedFarm.id).order("name").range(from, to)),
+      readAllRows<CropSeason>((from, to) => supabase.from("crop_seasons").select(CROP_SEASON_COLUMNS).eq("profile_id", user.id).eq("farm_id", selectedFarm.id).order("started_on").order("id").range(from, to)),
+      readAllRows<LivestockGroup>((from, to) => supabase.from("livestock_groups").select(LIVESTOCK_GROUP_COLUMNS).eq("profile_id", user.id).eq("farm_id", selectedFarm.id).order("name").order("id").range(from, to)),
       readAllRows<TypeOption>((from, to) => supabase.from("crop_types").select("id, name, category_id").order("name").range(from, to)),
       readAllRows<TypeOption>((from, to) => supabase.from("livestock_types").select("id, name, category_id").order("name").range(from, to)),
       supabase.from("counties").select("name").eq("id", selectedFarm.county_id).maybeSingle(),
@@ -143,12 +156,14 @@ export default async function FarmRecordsReportPage({ searchParams }: { searchPa
   const plotsById = new Map(plots.map((plot) => [plot.id, { name: plot.name, archived: plot.archived_at !== null }]));
   const cropName = new Map(cropTypes.map((item) => [item.id, item.name]));
   const livestockName = new Map(livestockTypes.map((item) => [item.id, item.name]));
-  const knownHeadCount = activeGroups.reduce((sum, group) => sum + (group.head_count ?? 0), 0);
-  const unknownHeadCountGroups = activeGroups.filter((group) => group.head_count === null).length;
+  const today = todayInKenya();
   const cropSummary = new Map<string, number>();
+  const cropStateSummary = new Map<CropSeasonState, number>();
   for (const season of activeSeasons) {
     const name = cropName.get(season.crop_type_id) ?? "Unknown crop";
     cropSummary.set(name, (cropSummary.get(name) ?? 0) + 1);
+    const state = cropSeasonState(season, today);
+    cropStateSummary.set(state, (cropStateSummary.get(state) ?? 0) + 1);
   }
   const livestockSummary = new Map<string, { groups: number; knownHead: number; unknown: number }>();
   for (const group of activeGroups) {
@@ -251,7 +266,7 @@ export default async function FarmRecordsReportPage({ searchParams }: { searchPa
                     {countyError && <span className="text-shamba-rust">County could not be loaded</span>}
                   </div>
                   <p className="mt-3 rounded-xl bg-shamba-green/5 p-3 text-sm leading-5 text-shamba-ink-soft">
-                    This is a current snapshot, not a report for a past date range or a measure of farm performance. Active plots, crop seasons and livestock groups are included; archived rows are excluded.
+                    This is a current snapshot, not a report for a past date range or a measure of farm performance. Non-archived plots, crop seasons and livestock groups are included; archived rows are excluded.
                   </p>
                   {summaryMode && <p className="mt-3 text-sm font-semibold text-shamba-ink-soft">Summary view · grouped counts and recorded totals</p>}
                 </div>
@@ -267,8 +282,8 @@ export default async function FarmRecordsReportPage({ searchParams }: { searchPa
                         (groupsError || groupsCapped) && (groupsCapped ? "more than 20,000 livestock groups" : "livestock groups"),
                         (cropTypesError || cropTypesCapped) && "crop names",
                         (livestockTypesError || livestockTypesCapped) && "livestock names",
-                      ].filter(Boolean).join(", ")} did not load completely, so the PDF action is unavailable.</p>
-                      <Link href={retryHref} prefetch={false} className="mt-2 inline-flex min-h-11 items-center font-semibold text-shamba-green">Try again</Link>
+                      ].filter(Boolean).join(", ")} did not load completely. Do not use this preview as a complete report; the print button is unavailable.</p>
+                      <Link data-print-hide href={retryHref} prefetch={false} className="mt-2 inline-flex min-h-11 items-center font-semibold text-shamba-green">Try again</Link>
                     </div>
                   </div>
                 )}
@@ -300,13 +315,14 @@ export default async function FarmRecordsReportPage({ searchParams }: { searchPa
                 </section>}
 
                 {selectedSections.has("seasons") && <section className="report-section mt-7" aria-labelledby="seasons-heading">
-                  <h3 id="seasons-heading" className="font-display text-lg font-bold">Crop seasons <span className="text-sm font-medium text-shamba-ink-soft">({seasonsError ? "not available" : `${activeSeasons.length} active`})</span></h3>
+                  <h3 id="seasons-heading" className="font-display text-lg font-bold">Crop seasons <span className="text-sm font-medium text-shamba-ink-soft">({seasonsError ? "not available" : `${activeSeasons.length} non-archived`})</span></h3>
                   {seasonsError ? <MissingData label="Crop seasons" /> : summaryMode ? (
                     <>
                       <dl className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <ProfileValue label="Active crop seasons" value={activeSeasons.length.toLocaleString("en-KE")} />
+                        <ProfileValue label="Non-archived crop seasons" value={activeSeasons.length.toLocaleString("en-KE")} />
                         <ProfileValue label="Seasons without recorded area" value={activeSeasons.filter((season) => season.area_acres === null).length.toLocaleString("en-KE")} />
                       </dl>
+                      {cropStateSummary.size > 0 && <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">{(["planned", "growing", "ended"] as const).filter((state) => cropStateSummary.has(state)).map((state) => <li key={state} className="rounded-xl border border-shamba-line p-3 text-sm"><span className="font-medium">{CROP_SEASON_STATE_LABELS[state]}</span><span className="float-right text-shamba-ink-soft">{cropStateSummary.get(state)} {cropStateSummary.get(state) === 1 ? "season" : "seasons"}</span></li>)}</ul>}
                       {cropSummary.size > 0 && <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">{[...cropSummary].sort(([a], [b]) => a.localeCompare(b)).map(([name, count]) => <li key={name} className="rounded-xl border border-shamba-line p-3 text-sm"><span className="font-medium">{name}</span><span className="float-right text-shamba-ink-soft">{count} {count === 1 ? "season" : "seasons"}</span></li>)}</ul>}
                     </>
                   ) : activeSeasons.length === 0 ? <p className="mt-2 text-sm text-shamba-ink-soft">No active crop seasons are recorded.</p> : (
@@ -315,7 +331,8 @@ export default async function FarmRecordsReportPage({ searchParams }: { searchPa
                         <thead className="bg-shamba-bg text-xs uppercase tracking-wide text-shamba-ink-soft"><tr><th className="p-3">Crop / season</th><th className="p-3">Plot</th><th className="p-3">Dates</th><th className="p-3">Recorded area</th></tr></thead>
                         <tbody>{activeSeasons.map((season) => {
                           const plot = season.plot_id ? plotsById.get(season.plot_id) : null;
-                          return <tr key={season.id} className="border-t border-shamba-line align-top"><td className="p-3 font-medium">{cropName.get(season.crop_type_id) ?? (cropTypesError ? "Crop name unavailable" : "Unknown crop")}{season.label && <span className="block text-xs font-normal text-shamba-ink-soft">{season.label}</span>}</td><td className="p-3">{season.plot_id ? plot ? <>{plot.name}{plot.archived && <span className="block text-xs text-shamba-ink-soft">Archived plot</span>}</> : "Plot not available" : "Whole farm"}</td><td className="p-3">{formatRecordDate(season.started_on)}{season.ended_on ? ` - ${formatRecordDate(season.ended_on)}` : " - Ongoing"}</td><td className="p-3">{season.area_acres === null ? "Not recorded" : formatAcres(season.area_acres)}<span className="block text-xs text-shamba-ink-soft">season area, not harvested area</span></td></tr>;
+                          const state = cropSeasonState(season, today);
+                          return <tr key={season.id} className="border-t border-shamba-line align-top"><td className="p-3 font-medium">{cropName.get(season.crop_type_id) ?? (cropTypesError ? "Crop name unavailable" : "Unknown crop")}{season.label && <span className="block text-xs font-normal text-shamba-ink-soft">{season.label}</span>}<span className="mt-1 block text-xs font-normal text-shamba-ink-soft">{CROP_SEASON_STATE_LABELS[state]}</span></td><td className="p-3">{season.plot_id ? plot ? <>{plot.name}{plot.archived && <span className="block text-xs text-shamba-ink-soft">Archived plot</span>}</> : "Plot not available" : "Whole farm"}</td><td className="p-3">{formatRecordDate(season.started_on)}{season.ended_on ? ` - ${formatRecordDate(season.ended_on)}` : " - Ongoing"}</td><td className="p-3">{season.area_acres === null ? "Not recorded" : formatAcres(season.area_acres)}<span className="block text-xs text-shamba-ink-soft">season area, not harvested area</span></td></tr>;
                         })}</tbody>
                       </table>
                     </div>
@@ -326,7 +343,6 @@ export default async function FarmRecordsReportPage({ searchParams }: { searchPa
                   <h3 id="livestock-heading" className="font-display text-lg font-bold">Livestock groups <span className="text-sm font-medium text-shamba-ink-soft">({groupsError ? "not available" : `${activeGroups.length} active`})</span></h3>
                   {groupsError ? <MissingData label="Livestock groups" /> : activeGroups.length === 0 ? <p className="mt-2 text-sm text-shamba-ink-soft">No active livestock groups are recorded.</p> : (
                     <>
-                      <p className="mt-2 text-sm leading-5 text-shamba-ink-soft">Known head-count subtotal: <strong className="text-shamba-ink">{knownHeadCount.toLocaleString("en-KE")}</strong>. {unknownHeadCountGroups} {unknownHeadCountGroups === 1 ? "group has" : "groups have"} no recorded count.</p>
                       {summaryMode ? <ul className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">{[...livestockSummary].sort(([a], [b]) => a.localeCompare(b)).map(([name, summary]) => <li key={name} className="rounded-xl border border-shamba-line p-3 text-sm"><span className="font-medium">{name}</span><span className="mt-1 block text-shamba-ink-soft">{summary.groups} {summary.groups === 1 ? "group" : "groups"} · {summary.knownHead.toLocaleString("en-KE")} known head · {summary.unknown} uncounted</span></li>)}</ul> : <div className="report-table-wrap mt-3 overflow-x-auto rounded-xl border border-shamba-line">
                         <table className="w-full min-w-[30rem] border-collapse text-left text-sm">
                           <thead className="bg-shamba-bg text-xs uppercase tracking-wide text-shamba-ink-soft"><tr><th className="p-3">Group</th><th className="p-3">Type</th><th className="p-3">Plot</th><th className="p-3">Since</th><th className="p-3">Head count</th></tr></thead>
