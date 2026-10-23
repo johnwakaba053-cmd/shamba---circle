@@ -37,7 +37,7 @@ function modules(farmId: string | null): Module[] {
     { label: "Inventory", description: "Supplies and stock levels", icon: Boxes, href: null, tone: "bg-shamba-ochre/15 text-shamba-ochre" },
     { label: "Finances", description: "Income and expenses", icon: Wallet, href: null, tone: "bg-shamba-rust/10 text-shamba-rust" },
     { label: "People & Work", description: "Staff, roles and tasks", icon: Users, href: null, tone: "bg-shamba-blue/15 text-shamba-blue" },
-    { label: "Reports", description: "Summaries and exports", icon: BarChart3, href: null, tone: "bg-shamba-blue/15 text-shamba-blue" },
+    { label: "Reports", description: "Farm snapshot and PDF", icon: BarChart3, href: farm ? `/farm-records/reports?farm=${encodeURIComponent(farmId ?? "")}` : "/farm-records/reports", tone: "bg-shamba-blue/15 text-shamba-blue" },
   ];
 }
 
