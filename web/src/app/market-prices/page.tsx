@@ -1,9 +1,14 @@
 import { redirect } from "next/navigation";
-import { Leaf, PawPrint, TrendingUp } from "lucide-react";
+import { Clock, Leaf, PawPrint, TrendingUp } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/AppHeader";
 import { PriceCard } from "@/components/PriceCard";
+import { STALE_PRICE_DAYS } from "@/app/my-farm/PricesSection";
 import { fetchRecentMarketPrices, type MarketPriceCard } from "@/lib/marketPrices";
+
+function formatPriceDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+}
 
 // Plant vs. Animal is a presentation grouping only, derived from the
 // same agricultural_price_products.category column used everywhere else
@@ -51,6 +56,13 @@ export default async function MarketPrices() {
   }
 
   const prices = await fetchRecentMarketPrices(supabase);
+  // Cards come newest first, so the first one is the newest price we have.
+  // Older than STALE_PRICE_DAYS (the same rule as My Farm), the whole page
+  // is flagged so old prices aren't read as today's.
+  const newest = prices[0]?.recordedAt;
+  const now = new Date();
+  const isStale =
+    newest !== undefined && now.getTime() - new Date(newest).getTime() > STALE_PRICE_DAYS * 24 * 60 * 60 * 1000;
 
   return (
     <div className="flex flex-1 flex-col bg-shamba-bg">
@@ -62,13 +74,28 @@ export default async function MarketPrices() {
             Market Prices
           </h1>
           <p className="mt-2 max-w-2xl text-base leading-6 text-shamba-ink-soft">
-            Current agricultural prices from trusted market sources in Kenya.
+            The latest agricultural prices reported by trusted market sources
+            in Kenya.
           </p>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-shamba-ink-soft">
             Prices come from a curated set of KAMIS-reporting markets and do
             not yet cover every market in Kenya.
           </p>
         </div>
+
+        {isStale && newest && (
+          <div
+            role="note"
+            className="flex max-w-2xl items-start gap-3 rounded-xl border border-shamba-ochre/30 bg-shamba-ochre/10 p-4 text-sm leading-6 text-shamba-ink"
+          >
+            <Clock className="mt-0.5 size-5 shrink-0 text-shamba-ochre" aria-hidden="true" />
+            <p>
+              <span className="font-semibold">These prices are not current.</span> The newest price
+              we have is from {formatPriceDate(newest)}, and no newer KAMIS prices have come in
+              since. Check the date on each price before you buy or sell.
+            </p>
+          </div>
+        )}
 
         {prices.length === 0 ? (
           <div className="w-full max-w-sm rounded-shamba border border-shamba-line bg-shamba-card p-6">
